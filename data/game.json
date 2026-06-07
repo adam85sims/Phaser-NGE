@@ -1,0 +1,12 @@
+{
+  "title": "Untitled Narrative",
+  "version": "1.0.0",
+  "startScene": "sample",
+  "scenes": ["sample", "test-conditions", "test-events"],
+  "defaults": {
+    "textSpeed": 40,
+    "autoAdvance": false,
+    "bgmVolume": 0.7,
+    "sfxVolume": 1.0
+  }
+}

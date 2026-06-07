@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dialogue Editor — Narrative Engine</title>
+<link rel="stylesheet" href="editor.css">
+</head>
+<body>
+
+<!-- ─── TOOLBAR ─── -->
+<div id="toolbar">
+  <span class="brand">◆ Dialogue Editor</span>
+  <select id="scene-select"></select>
+  <button id="btn-new-scene">+ New</button>
+  <button id="btn-delete-scene" class="danger">Delete</button>
+  <div class="spacer"></div>
+  <button id="btn-add-node">+ Node</button>
+  <button id="btn-auto-layout">⟐ Auto Layout</button>
+  <button id="btn-fit-view">⊡ Fit</button>
+  <button id="btn-preview">☰ Preview</button>
+  <button id="btn-export" class="primary">⬇ Export</button>
+  <span class="status" id="status"><span class="dot saved" id="status-dot"></span><span id="status-text">Ready</span></span>
+</div>
+
+<!-- ─── MAIN ─── -->
+<div id="main">
+
+  <!-- Left: Node List -->
+  <div id="node-list">
+    <div class="header">
+      <span>Nodes</span>
+      <button id="btn-list-add-node">+</button>
+    </div>
+    <div id="node-list-items"></div>
+  </div>
+
+  <!-- Center: Graph Canvas -->
+  <div id="graph">
+    <canvas id="graph-canvas"></canvas>
+    <div class="graph-controls">
+      <button id="btn-zoom-in">+</button>
+      <button id="btn-zoom-out">−</button>
+      <button id="btn-fit">⊡</button>
+    </div>
+  </div>
+
+  <!-- Right: Node Editor -->
+  <div id="node-editor">
+    <div class="header">Node Properties</div>
+    <div id="editor-content">
+      <div class="empty">Select a node to edit</div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PREVIEW ─── -->
+<div id="preview">
+  <div class="header">
+    <span>Preview</span>
+    <button id="btn-close-preview">✕</button>
+  </div>
+  <div class="preview-box" id="preview-box">
+    <div class="speaker" id="preview-speaker"></div>
+    <div class="text" id="preview-text"></div>
+  </div>
+</div>
+
+<script src="editor.js"></script>
+</body>
+</html>

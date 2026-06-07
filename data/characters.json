@@ -1,0 +1,18 @@
+{
+  "hero": {
+    "name": "Lena",
+    "color": "#00ccff",
+    "portraits": {},
+    "defaultExpression": "neutral"
+  },
+  "narrator": {
+    "name": null,
+    "color": "#ffffff"
+  },
+  "mystery_man": {
+    "name": "???",
+    "color": "#ff6644",
+    "portraits": {},
+    "defaultExpression": "neutral"
+  }
+}

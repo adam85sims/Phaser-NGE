@@ -1,0 +1,487 @@
+/**
+ * VariableSystem unit tests.
+ *
+ * VariableSystem is pure logic — no Phaser or DOM dependencies.
+ * It reads variable definitions from Data.variables on construction.
+ */
+import { describe, it, expect, beforeEach } from 'vitest';
+import { Data } from '../../src/systems/DataLoader.js';
+import { VariableSystem } from '../../src/systems/VariableSystem.js';
+
+/* ── Helpers ─────────────────────────────── */
+
+function setDataVariables(defs) {
+  Data.variables = defs;
+}
+
+/* ── Tests ───────────────────────────────── */
+
+describe('VariableSystem', () => {
+
+  beforeEach(() => {
+    // Reset Data before each test
+    Data.variables = null;
+  });
+
+  /* ── Init ────────────────────── */
+
+  describe('construction & init', () => {
+
+    it('initialises from Data.variables with default values', () => {
+      setDataVariables({
+        hp: { type: 'number', default: 100 },
+        alive: { type: 'boolean', default: true },
+        name: { type: 'string', default: 'Lena' },
+      });
+      const vs = new VariableSystem();
+      expect(vs.get('hp')).toBe(100);
+      expect(vs.get('alive')).toBe(true);
+      expect(vs.get('name')).toBe('Lena');
+    });
+
+    it('handles empty variable definitions', () => {
+      setDataVariables({});
+      const vs = new VariableSystem();
+      expect(vs.get('anything')).toBeUndefined();
+    });
+
+    it('handles null variable definitions', () => {
+      Data.variables = null;
+      const vs = new VariableSystem();
+      expect(vs.get('anything')).toBeUndefined();
+    });
+
+    it('handles missing variables.json gracefully', () => {
+      Data.variables = undefined;
+      const vs = new VariableSystem();
+      expect(vs.get('anything')).toBeUndefined();
+    });
+  });
+
+  /* ── get / set ────────────────── */
+
+  describe('get / set', () => {
+
+    it('get returns current value', () => {
+      setDataVariables({ score: { type: 'number', default: 0 } });
+      const vs = new VariableSystem();
+      expect(vs.get('score')).toBe(0);
+    });
+
+    it('set updates the value', () => {
+      setDataVariables({ score: { type: 'number', default: 0 } });
+      const vs = new VariableSystem();
+      vs.set('score', 42);
+      expect(vs.get('score')).toBe(42);
+    });
+
+    it('get returns undefined for unknown variables', () => {
+      setDataVariables({});
+      const vs = new VariableSystem();
+      expect(vs.get('nonexistent')).toBeUndefined();
+    });
+
+    it('set creates a new variable if it did not exist', () => {
+      setDataVariables({});
+      const vs = new VariableSystem();
+      vs.set('dynamic_flag', true);
+      expect(vs.get('dynamic_flag')).toBe(true);
+    });
+
+    it('set overwrites existing values', () => {
+      setDataVariables({ x: { type: 'number', default: 10 } });
+      const vs = new VariableSystem();
+      vs.set('x', 20);
+      vs.set('x', 30);
+      expect(vs.get('x')).toBe(30);
+    });
+  });
+
+  /* ── add (delta) ──────────────── */
+
+  describe('add (numeric delta)', () => {
+
+    it('adds a positive delta', () => {
+      setDataVariables({ gold: { type: 'number', default: 50 } });
+      const vs = new VariableSystem();
+      vs.add('gold', 10);
+      expect(vs.get('gold')).toBe(60);
+    });
+
+    it('subtracts with negative delta', () => {
+      setDataVariables({ gold: { type: 'number', default: 50 } });
+      const vs = new VariableSystem();
+      vs.add('gold', -15);
+      expect(vs.get('gold')).toBe(35);
+    });
+
+    it('silently ignores non-numeric variables', () => {
+      setDataVariables({ name: { type: 'string', default: 'Lena' } });
+      const vs = new VariableSystem();
+      vs.add('name', 5);        // no error
+      expect(vs.get('name')).toBe('Lena');  // unchanged
+    });
+
+    it('silently ignores unknown variables', () => {
+      setDataVariables({});
+      const vs = new VariableSystem();
+      vs.add('nothing', 99);    // no crash
+      expect(vs.get('nothing')).toBeUndefined();
+    });
+  });
+
+  /* ── toggle (boolean) ─────────── */
+
+  describe('toggle (boolean)', () => {
+
+    it('toggles true to false', () => {
+      setDataVariables({ active: { type: 'boolean', default: true } });
+      const vs = new VariableSystem();
+      vs.toggle('active');
+      expect(vs.get('active')).toBe(false);
+    });
+
+    it('toggles false to true', () => {
+      setDataVariables({ active: { type: 'boolean', default: false } });
+      const vs = new VariableSystem();
+      vs.toggle('active');
+      expect(vs.get('active')).toBe(true);
+    });
+
+    it('toggles undefined to true', () => {
+      setDataVariables({});
+      const vs = new VariableSystem();
+      vs.toggle('new_flag');
+      expect(vs.get('new_flag')).toBe(true);
+    });
+  });
+
+  /* ── Condition evaluation ─────── */
+
+  describe('evaluate condition strings', () => {
+
+    let vs;
+    beforeEach(() => {
+      setDataVariables({
+        courage: { type: 'number', default: 50 },
+        has_key: { type: 'boolean', default: false },
+        name: { type: 'string', default: 'Lena' },
+        level: { type: 'number', default: 5 },
+        items: { type: 'number', default: 0 },
+      });
+      vs = new VariableSystem();
+    });
+
+    it('returns true when condition is empty', () => {
+      expect(vs.evaluate('')).toBe(true);
+    });
+
+    it('returns true when condition is null', () => {
+      expect(vs.evaluate(null)).toBe(true);
+    });
+
+    it('returns true when condition is whitespace', () => {
+      expect(vs.evaluate('   ')).toBe(true);
+    });
+
+    /* ── Numeric comparisons ── */
+
+    it('evaluates == (equal) correctly', () => {
+      expect(vs.evaluate('courage == 50')).toBe(true);
+      expect(vs.evaluate('courage == 99')).toBe(false);
+    });
+
+    it('evaluates != (not equal) correctly', () => {
+      expect(vs.evaluate('courage != 40')).toBe(true);
+      expect(vs.evaluate('courage != 50')).toBe(false);
+    });
+
+    it('evaluates >= (greater than or equal) correctly', () => {
+      expect(vs.evaluate('courage >= 50')).toBe(true);
+      expect(vs.evaluate('courage >= 51')).toBe(false);
+      expect(vs.evaluate('courage >= 30')).toBe(true);
+    });
+
+    it('evaluates <= (less than or equal) correctly', () => {
+      expect(vs.evaluate('courage <= 50')).toBe(true);
+      expect(vs.evaluate('courage <= 49')).toBe(false);
+      expect(vs.evaluate('courage <= 60')).toBe(true);
+    });
+
+    it('evaluates > (greater than) correctly', () => {
+      expect(vs.evaluate('courage > 49')).toBe(true);
+      expect(vs.evaluate('courage > 50')).toBe(false);
+    });
+
+    it('evaluates < (less than) correctly', () => {
+      expect(vs.evaluate('courage < 51')).toBe(true);
+      expect(vs.evaluate('courage < 50')).toBe(false);
+    });
+
+    /* ── Boolean comparisons ── */
+
+    it('evaluates boolean == true/false', () => {
+      expect(vs.evaluate('has_key == false')).toBe(true);
+      expect(vs.evaluate('has_key == true')).toBe(false);
+    });
+
+    it('evaluates boolean != true/false', () => {
+      expect(vs.evaluate('has_key != true')).toBe(true);
+      vs.set('has_key', true);
+      expect(vs.evaluate('has_key != false')).toBe(true);
+    });
+
+    /* ── String comparisons ── */
+
+    it('evaluates string == with unquoted value', () => {
+      expect(vs.evaluate('name == Lena')).toBe(true);
+      expect(vs.evaluate('name == Adam')).toBe(false);
+    });
+
+    it('evaluates string == with quoted value', () => {
+      expect(vs.evaluate('name == "Lena"')).toBe(true);
+      expect(vs.evaluate("name == 'Lena'")).toBe(true);
+    });
+
+    it('evaluates string != correctly', () => {
+      expect(vs.evaluate('name != Adam')).toBe(true);
+      expect(vs.evaluate('name != Lena')).toBe(false);
+    });
+
+    /* ── Edge cases ── */
+
+    it('returns false for malformed conditions', () => {
+      expect(vs.evaluate('not a condition')).toBe(false);
+    });
+
+    it('returns false when comparing undefined variable', () => {
+      expect(vs.evaluate('unknown == 10')).toBe(false);
+    });
+
+    it('handles `=` as alias for `==`', () => {
+      expect(vs.evaluate('courage = 50')).toBe(true);
+      expect(vs.evaluate('courage = 99')).toBe(false);
+    });
+
+    it('handles zero and negative values', () => {
+      vs.set('items', 0);
+      expect(vs.evaluate('items == 0')).toBe(true);
+      expect(vs.evaluate('items >= 0')).toBe(true);
+      expect(vs.evaluate('items < 1')).toBe(true);
+      vs.set('items', -5);
+      expect(vs.evaluate('items < 0')).toBe(true);
+      expect(vs.evaluate('items == -5')).toBe(true);
+    });
+  });
+
+  /* ── applyAction ───────────────── */
+
+  describe('applyAction', () => {
+
+    let vs;
+    beforeEach(() => {
+      setDataVariables({ courage: { type: 'number', default: 50 } });
+      vs = new VariableSystem();
+    });
+
+    it('sets a variable via { setFlag, setValue }', () => {
+      vs.applyAction({ setFlag: 'courage', setValue: 75 });
+      expect(vs.get('courage')).toBe(75);
+    });
+
+    it('applies setFlag/setValue on a non-existent variable', () => {
+      vs.applyAction({ setFlag: 'new_flag', setValue: true });
+      expect(vs.get('new_flag')).toBe(true);
+    });
+
+    it('toggles a flag via { toggleFlag }', () => {
+      vs.set('toggle_me', false);
+      vs.applyAction({ toggleFlag: 'toggle_me' });
+      expect(vs.get('toggle_me')).toBe(true);
+    });
+
+    it('adds delta via { addFlag, delta }', () => {
+      vs.applyAction({ addFlag: 'courage', delta: 10 });
+      expect(vs.get('courage')).toBe(60);
+    });
+
+    it('handles null/undefined action gracefully', () => {
+      expect(() => vs.applyAction(null)).not.toThrow();
+      expect(() => vs.applyAction(undefined)).not.toThrow();
+    });
+
+    it('handles action with no relevant fields', () => {
+      expect(() => vs.applyAction({})).not.toThrow();
+      expect(vs.get('courage')).toBe(50); // unchanged
+    });
+
+    it('can apply all three actions together', () => {
+      const spy = { calls: [] };
+      vs.onChange('a', (n, v) => spy.calls.push({ n, v }));
+      vs.onChange('b', (n, v) => spy.calls.push({ n, v }));
+
+      vs.applyAction({ setFlag: 'a', setValue: 10, toggleFlag: 'b', addFlag: 'courage', delta: 5 });
+
+      expect(vs.get('a')).toBe(10);
+      expect(vs.get('b')).toBe(true);
+      expect(vs.get('courage')).toBe(55);
+      expect(spy.calls.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  /* ── Serialize / Deserialize ───── */
+
+  describe('serialize / deserialize', () => {
+
+    it('serialize returns a plain object of all vars', () => {
+      setDataVariables({
+        a: { type: 'number', default: 1 },
+        b: { type: 'boolean', default: true },
+      });
+      const vs = new VariableSystem();
+      const snapshot = vs.serialize();
+      expect(snapshot).toEqual({ a: 1, b: true });
+    });
+
+    it('serialize returns a copy (not a reference)', () => {
+      setDataVariables({ x: { type: 'number', default: 5 } });
+      const vs = new VariableSystem();
+      const snapshot = vs.serialize();
+      snapshot.x = 999;
+      expect(vs.get('x')).toBe(5);
+    });
+
+    it('deserialize restores saved state', () => {
+      setDataVariables({ courage: { type: 'number', default: 50 } });
+      const vs = new VariableSystem();
+      vs.set('courage', 80);
+      const saved = vs.serialize();
+
+      const vs2 = new VariableSystem();
+      vs2.deserialize(saved);
+      expect(vs2.get('courage')).toBe(80);
+    });
+
+    it('deserialize can add variables that did not exist at init', () => {
+      setDataVariables({});
+      const vs = new VariableSystem();
+      vs.deserialize({ new_flag: 'hello', score: 42 });
+      expect(vs.get('new_flag')).toBe('hello');
+      expect(vs.get('score')).toBe(42);
+    });
+  });
+
+  /* ── Listeners ─────────────────── */
+
+  describe('onChange listeners', () => {
+
+    it('calls listener when variable changes via set()', () => {
+      setDataVariables({ x: { type: 'number', default: 0 } });
+      const vs = new VariableSystem();
+      const calls = [];
+      vs.onChange('x', (name, value) => calls.push({ name, value }));
+      vs.set('x', 42);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toEqual({ name: 'x', value: 42 });
+    });
+
+    it('does NOT call listener when variable is set to same value', () => {
+      setDataVariables({ x: { type: 'number', default: 0 } });
+      const vs = new VariableSystem();
+      const calls = [];
+      vs.onChange('x', (name, value) => calls.push({ name, value }));
+      vs.set('x', 0); // same as default
+      expect(calls).toHaveLength(0);
+    });
+
+    it('multiple listeners on the same variable all fire', () => {
+      setDataVariables({ x: { type: 'number', default: 0 } });
+      const vs = new VariableSystem();
+      const calls = [];
+      vs.onChange('x', () => calls.push('a'));
+      vs.onChange('x', () => calls.push('b'));
+      vs.set('x', 1);
+      expect(calls).toEqual(['a', 'b']);
+    });
+
+    it('listeners fire for toggle() and add() changes', () => {
+      setDataVariables({
+        flag: { type: 'boolean', default: false },
+        num: { type: 'number', default: 10 },
+      });
+      const vs = new VariableSystem();
+      const calls = [];
+      vs.onChange('flag', (n) => calls.push(`flag:${n}`));
+      vs.onChange('num', (n) => calls.push(`num:${n}`));
+
+      vs.toggle('flag');
+      vs.add('num', 5);
+
+      expect(calls).toContain('flag:flag');
+      expect(calls).toContain('num:num');
+    });
+
+    it('listeners are NOT called for unchanged toggle/add', () => {
+      // add to undefined var doesn't change it
+      setDataVariables({});
+      const vs = new VariableSystem();
+      const calls = [];
+      vs.onChange('nothing', () => calls.push('fired'));
+      vs.add('nothing', 99);
+      expect(calls).toHaveLength(0);
+    });
+  });
+
+  /* ── Integration scenarios ─────── */
+
+  describe('integration scenarios', () => {
+
+    it('simulates a branching-quest variable flow', () => {
+      setDataVariables({
+        courage: { type: 'number', default: 30, min: 0, max: 100 },
+        has_weapon_permit: { type: 'boolean', default: false },
+      });
+      const vs = new VariableSystem();
+
+      // Path A: Player makes brave choices
+      vs.applyAction({ setFlag: 'courage', setValue: 30 });
+      expect(vs.evaluate('courage >= 50')).toBe(false);
+
+      vs.add('courage', 25);
+      expect(vs.evaluate('courage >= 50')).toBe(true);
+      expect(vs.evaluate('has_weapon_permit == true')).toBe(false);
+
+      // Path B: Player gets a permit
+      vs.set('has_weapon_permit', true);
+      expect(vs.evaluate('has_weapon_permit == true')).toBe(true);
+      expect(vs.evaluate('courage >= 50')).toBe(true); // still true
+
+      // Save state
+      const save = vs.serialize();
+      expect(save.courage).toBe(55);
+      expect(save.has_weapon_permit).toBe(true);
+
+      // Load into fresh system
+      const vs2 = new VariableSystem();
+      vs2.deserialize(save);
+      expect(vs2.evaluate('courage >= 50')).toBe(true);
+      expect(vs2.evaluate('has_weapon_permit == true')).toBe(true);
+    });
+
+    it('gracefully handles unexpected variable types', () => {
+      Data.variables = null;
+      const vs = new VariableSystem();
+
+      // Setting a variable after the fact works
+      vs.set('strange', { complex: 'object' });
+      expect(vs.get('strange')).toEqual({ complex: 'object' });
+
+      // set works regardless
+      vs.set('strange', 'now a string');
+      expect(vs.get('strange')).toBe('now a string');
+
+      // Evaluate returns false for complex/unexpected comparisons
+      expect(vs.evaluate('strange == something')).toBe(false);
+    });
+  });
+});

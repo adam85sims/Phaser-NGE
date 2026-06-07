@@ -1,0 +1,22 @@
+{
+  "name": "phaser-nge",
+  "version": "0.1.0",
+  "description": "Phaser Narrative Game Engine — data-driven VN engine with visual editor and extensible genre modules",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run --config tests/vitest.config.js",
+    "test:watch": "vitest --config tests/vitest.config.js"
+  },
+  "dependencies": {
+    "phaser": "^4.1.0"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "vite": "^6.3.0",
+    "vitest": "^4.1.8"
+  }
+}

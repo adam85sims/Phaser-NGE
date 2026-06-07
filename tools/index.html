@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Narrative Engine</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ─── SIDEBAR ─── -->
+  <div id="sidebar">
+    <div class="project-name" id="project-name">
+      Loading...
+      <small>Narrative Engine</small>
+    </div>
+    <div class="nav-section">Tools</div>
+    <div id="nav-list"></div>
+    <div id="sidebar-bottom">
+      <button class="btn btn-sidebar-action" onclick="window.__showNewProjectModal()">
+        ✦ New Project
+      </button>
+      <button class="btn btn-sidebar-action" onclick="window.__exportProject()">
+        ⬇ Export Project
+      </button>
+      <button class="btn btn-sidebar-action" onclick="window.__openImportProject()">
+        ⬆ Import Project
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── TOP BAR ─── -->
+  <div id="topbar">
+    <div class="breadcrumb" id="breadcrumb">◈ Dashboard</div>
+    <div class="spacer"></div>
+    <button class="btn-save" id="btn-save" onclick="window.__saveProject()" title="Save project to localStorage">💾 Save</button>
+    <span class="status-badge" id="status-badge">—</span>
+    <a href="/" target="_blank" class="launch-btn">▶ Launch Game</a>
+  </div>
+
+  <!-- ─── CONTENT ─── -->
+  <div id="content">
+    <div class="placeholder-view">
+      <div class="spinner" style="width:24px;height:24px"></div>
+      <p class="mt-8 text-dim">Loading project...</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── NEW PROJECT MODAL ─── -->
+<div id="modal-overlay" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <h2>✦ New Project</h2>
+    <p class="text-dim" style="margin-bottom:14px;line-height:1.6">
+      Start a fresh narrative project. The current in-memory project will be cleared and
+      your browser's save dialog will appear so you can save the new project file to disk.
+      Any data files on disk won't be touched.
+    </p>
+    <div class="form-group">
+      <label>Project Title</label>
+      <input type="text" id="new-project-name" value="Untitled Narrative"
+             class="modal-input" placeholder="My Story"
+             onkeydown="if(event.key==='Enter')window.__confirmNewProject()" />
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+      <button class="btn" onclick="window.__hideNewProjectModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="window.__confirmNewProject()">Create Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input for project import -->
+<input type="file" id="import-file-input" accept=".json" style="display:none" />
+
+<script type="module">
+import { registerView } from './app.js';
+import * as dashboard from './views/dashboard.js';
+import * as scenes from './views/scenes.js';
+import * as dialogueEditor from './views/dialogue-editor.js';
+import * as characters from './views/characters.js';
+import * as variables from './views/variables.js';
+import * as assets from './views/assets.js';
+import * as layouts from './views/layouts.js';
+import * as settings from './views/settings.js';
+
+registerView('dashboard', dashboard);
+registerView('scenes', scenes);
+registerView('dialogue', dialogueEditor);
+registerView('characters', characters);
+registerView('variables', variables);
+registerView('assets', assets);
+registerView('layouts', layouts);
+registerView('settings', settings);
+
+// Boot the application after all views are registered
+import { boot } from './app.js';
+boot();
+</script>
+</body>
+</html>
