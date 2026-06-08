@@ -112,13 +112,12 @@ describe('SaveSystem', () => {
       expect(slots[2].slot).toBe(2);
     });
 
-    it('includes nodeIndex from scene controller', () => {
+    it('includes nodeId from scene controller', () => {
       ctrl.currentScene = { id: 'test' };
       ctrl.currentNode = { id: 'node_3' };
-      ctrl.nodeIndex = 3;
 
       const result = saveSys.save(0);
-      expect(result.nodeIndex).toBe(3);
+      expect(result.nodeId).toBe('node_3');
     });
 
     it('handles save when scene/node are null', () => {
@@ -139,7 +138,6 @@ describe('SaveSystem', () => {
       vs.set('courage', 99); // set some state
       ctrl.currentScene = { id: 'scene_5' };
       ctrl.currentNode = { id: 'node_42' };
-      ctrl.nodeIndex = 42;
 
       saveSys.save(0);
 
@@ -150,7 +148,7 @@ describe('SaveSystem', () => {
 
       expect(loaded).not.toBeNull();
       expect(loaded.sceneId).toBe('scene_5');
-      expect(loaded.nodeIndex).toBe(42);
+      expect(loaded.nodeId).toBe('node_42');
       expect(vs.get('courage')).toBe(99); // restored
     });
 
@@ -220,6 +218,51 @@ describe('SaveSystem', () => {
 
   /* ── Integration ───────────────────── */
 
+  describe('quick save / auto save', () => {
+
+    it('quickSave saves to slot 0', () => {
+      vs.set('courage', 99);
+      ctrl.currentScene = { id: 'forest' };
+      ctrl.currentNode = { id: 'clearing' };
+
+      saveSys.quickSave();
+
+      const slots = saveSys.getSlots();
+      expect(slots[0].slot).toBe(0);
+      expect(slots[0].sceneId).toBe('forest');
+      expect(slots[0].nodeId).toBe('clearing');
+    });
+
+    it('quickLoad restores from slot 0', () => {
+      vs.set('courage', 42);
+      ctrl.currentScene = { id: 'dungeon' };
+      ctrl.currentNode = { id: 'entrance' };
+      saveSys.quickSave();
+
+      vs.set('courage', 0);
+      const loaded = saveSys.quickLoad();
+      expect(vs.get('courage')).toBe(42);
+      expect(loaded.sceneId).toBe('dungeon');
+      expect(loaded.nodeId).toBe('entrance');
+    });
+
+    it('quickLoad returns null when no quick save exists', () => {
+      const loaded = saveSys.quickLoad();
+      expect(loaded).toBeNull();
+    });
+
+    it('autoSave saves to slot 9', () => {
+      ctrl.currentScene = { id: 'chapter_2' };
+      ctrl.currentNode = { id: 'start_2' };
+
+      saveSys.autoSave();
+
+      const slots = saveSys.getSlots();
+      expect(slots[9].slot).toBe(9);
+      expect(slots[9].sceneId).toBe('chapter_2');
+    });
+  });
+
   describe('integration: save/load round-trip', () => {
 
     it('preserves game state across save/load cycle', () => {
@@ -237,7 +280,6 @@ describe('SaveSystem', () => {
 
       ctrl.currentScene = { id: 'forest' };
       ctrl.currentNode = { id: 'clearing' };
-      ctrl.nodeIndex = 12;
 
       // Save
       saveSys.save(2);
@@ -256,7 +298,7 @@ describe('SaveSystem', () => {
       expect(vs.get('has_key')).toBe(true);
       expect(vs.get('name')).toBe('Hero');
       expect(loaded.sceneId).toBe('forest');
-      expect(loaded.nodeIndex).toBe(12);
+      expect(loaded.nodeId).toBe('clearing');
     });
 
     it('handles multiple save slots independently', () => {

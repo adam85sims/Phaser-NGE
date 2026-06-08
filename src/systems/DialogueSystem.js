@@ -1,4 +1,5 @@
 import { Data } from './DataLoader.js';
+import { Settings } from './SettingsSystem.js';
 
 /**
  * DialogueSystem — renders text boxes, typewriter effect,
@@ -10,21 +11,31 @@ export class DialogueSystem {
   constructor(scene) {
     this.scene = scene;
 
-    // Layout (will be configurable via layout tool)
+    // Layout (configurable via theme.json)
+    const theme = Data.theme?.dialogue || {};
     this.box = {
-      x: 40,
-      y: 420,
-      w: 720,
-      h: 150,
-      padding: 16,
-      nameplateHeight: 30
+      x: theme.textBoxPosition?.x ?? 40,
+      y: theme.textBoxPosition?.y ?? 420,
+      w: theme.textBoxSize?.width ?? 720,
+      h: theme.textBoxSize?.height ?? 150,
+      paddingX: theme.padding?.x ?? 16,
+      paddingY: theme.padding?.y ?? 16,
+      nameplateHeight: theme.nameplateHeight ?? 30
     };
 
     // Container for all dialogue UI elements
     this.container = scene.add.container(0, 0).setDepth(100);
 
-    // Text speed (ms between characters)
-    this.textSpeed = Data.getDefaultTextSpeed();
+    // Styling from theme
+    this.textStyle = {
+      fontSize: theme.fontSize ? `${theme.fontSize}px` : '16px',
+      fontFamily: theme.fontFamily ?? 'monospace',
+      color: theme.textColor ?? '#e0e0e0',
+      wordWrap: { width: this.box.w - this.box.paddingX * 2 },
+      lineSpacing: theme.lineSpacing ?? 6
+    };
+
+    this.textSpeed = theme.textSpeed ?? Settings.textSpeed;
 
     // Typewriter state
     this._fullText = '';
@@ -34,6 +45,16 @@ export class DialogueSystem {
     this._isTyping = false;
     this._callback = null;  // called when typewriter finishes or is skipped
 
+    // ── Dialogue history ──
+    this.history = [];      // [{ speaker, text }]
+
+    // ── Skip mode ──
+    this.skipMode = false;
+
+    // ── Auto mode ──
+    this.autoMode = false;
+    this._autoModeTimer = null;
+
     // Build the UI
     this._buildUI();
   }
@@ -41,7 +62,7 @@ export class DialogueSystem {
   /* ── Build the text box ─────────────────────── */
 
   _buildUI() {
-    const { x, y, w, h, padding, nameplateHeight } = this.box;
+    const { x, y, w, h, paddingX, paddingY, nameplateHeight } = this.box;
 
     // Text box background (procedural)
     this.bg = this.scene.add.graphics();
@@ -49,7 +70,7 @@ export class DialogueSystem {
     this.container.add(this.bg);
 
     // Nameplate label
-    this.nameplate = this.scene.add.text(x + padding, y - nameplateHeight + 4, '', {
+    this.nameplate = this.scene.add.text(x + paddingX, y - nameplateHeight + 4, '', {
       fontSize: '14px',
       fontFamily: 'monospace',
       color: '#ffffff',
@@ -59,18 +80,12 @@ export class DialogueSystem {
     this.container.add(this.nameplate);
 
     // Dialogue text
-    this.text = this.scene.add.text(x + padding, y + padding, '', {
-      fontSize: '16px',
-      fontFamily: 'monospace',
-      color: '#e0e0e0',
-      wordWrap: { width: w - padding * 2 },
-      lineSpacing: 6
-    });
+    this.text = this.scene.add.text(x + paddingX, y + paddingY, '', this.textStyle);
     this.container.add(this.text);
 
     // Continue indicator (blinking arrow)
     this.continueArrow = this.scene.add.text(
-      x + w - padding, y + h - padding, '▼', {
+      x + w - paddingX, y + h - paddingY, '▼', {
         fontSize: '12px',
         fontFamily: 'monospace',
         color: '#00ccff'
@@ -118,6 +133,9 @@ export class DialogueSystem {
   showDialogue(speakerId, text, expression, onComplete) {
     this.setVisible(true);
     this._callback = onComplete;
+
+    // Record history
+    this.history.push({ speaker: speakerId, text: text });
 
     // Nameplate
     const charData = Data.getCharacter(speakerId);
@@ -228,14 +246,14 @@ export class DialogueSystem {
 
     // Build choice buttons
     this.hideChoices();
-    const { x, y, w, padding } = this.box;
-    const startY = y + padding + 10;
+    const { x, y, w, paddingX, paddingY } = this.box;
+    const startY = y + paddingY + 10;
 
     choices.forEach((c, i) => {
       const label = `[${i + 1}] ${c.text}`;
-      const choiceText = this.scene.add.text(x + padding, startY + i * 30, label, {
-        fontSize: '15px',
-        fontFamily: 'monospace',
+      const choiceText = this.scene.add.text(x + paddingX, startY + i * 30, label, {
+        fontSize: this.textStyle.fontSize,
+        fontFamily: this.textStyle.fontFamily,
         color: c.index === 0 ? '#00ccff' : '#aaaaaa'
       });
       choiceText.setInteractive({ useHandCursor: true });
@@ -259,11 +277,142 @@ export class DialogueSystem {
     this.choiceContainer.setVisible(false);
   }
 
+  /* ── Skip / Auto Modes ─────────────────────────── */
+
+  setSkipMode(enabled) {
+    this.skipMode = enabled;
+  }
+
+  setAutoMode(enabled) {
+    this.autoMode = enabled;
+    // If enabling while not typing, schedule auto-advance
+    if (enabled && !this._isTyping) {
+      this._scheduleAutoAdvance();
+    }
+  }
+
+  toggleSkip() {
+    this.setSkipMode(!this.skipMode);
+  }
+
+  toggleAuto() {
+    this.setAutoMode(!this.autoMode);
+  }
+
+  setTextSpeed(ms) {
+    this.textSpeed = ms;
+  }
+
+  _scheduleAutoAdvance() {
+    this._cancelAutoAdvance();
+    if (!this.autoMode) return;
+    this._autoModeTimer = this.scene.time.delayedCall(2000, () => {
+      // Advance if still in auto mode and not at a choice
+      if (this.autoMode && !this._isTyping) {
+        // Signal to the game scene to advance
+        if (this._callback) {
+          const cb = this._callback;
+          this._callback = null;
+          cb();
+        }
+      }
+    });
+  }
+
+  _cancelAutoAdvance() {
+    if (this._autoModeTimer) {
+      this._autoModeTimer.remove();
+      this._autoModeTimer = null;
+    }
+  }
+
+  /* ── History ──────────────────────────────────── */
+
+  getHistory() {
+    return this.history;
+  }
+
+  showHistory() {
+    if (this._historyContainer) {
+      this._historyContainer.destroy();
+      this._historyContainer = null;
+      return;
+    }
+
+    const { x, y, w, h } = this.box;
+    const container = this.scene.add.container(0, 0).setDepth(300);
+
+    // Semi-transparent overlay
+    const overlay = this.scene.add.graphics();
+    overlay.fillStyle(0x000000, 0.85);
+    overlay.fillRect(0, 0, 800, 600);
+    container.add(overlay);
+
+    // Title
+    const title = this.scene.add.text(400, 20, 'Dialogue History', {
+      fontSize: '20px', fontFamily: 'monospace', color: '#ffffff',
+    }).setOrigin(0.5, 0);
+    container.add(title);
+
+    // History lines (last 50, reversed so newest at bottom)
+    const lines = this.history.slice(-50);
+    const lineHeight = 22;
+    const startY = 60;
+    const maxVisible = Math.min(lines.length, 22);
+
+    for (let i = 0; i < maxVisible; i++) {
+      const entry = lines[i];
+      const speakerName = entry.speaker ? Data.getCharacter(entry.speaker)?.name || entry.speaker : 'Narrator';
+      const color = entry.speaker ? Data.getCharacter(entry.speaker)?.color || '#cccccc' : '#666688';
+      const label = `${speakerName}: ${entry.text || ''}`;
+      // Truncate long lines
+      const displayText = label.length > 80 ? label.slice(0, 77) + '...' : label;
+
+      const line = this.scene.add.text(40, startY + i * lineHeight, displayText, {
+        fontSize: '12px', fontFamily: 'monospace', color: color,
+        wordWrap: { width: 720 },
+      });
+      container.add(line);
+    }
+
+    // Close hint
+    const hint = this.scene.add.text(400, 580, 'Press H or click to close', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#666688',
+    }).setOrigin(0.5);
+    container.add(hint);
+
+    // Click anywhere to close
+    overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, 800, 600), Phaser.Geom.Rectangle.Contains);
+    overlay.on('pointerdown', () => {
+      container.destroy();
+      this._historyContainer = null;
+    });
+
+    this._historyContainer = container;
+
+    // Allow keyboard to close too — wire via scene
+    this.scene.input.keyboard.on('keydown-H', () => {
+      if (this._historyContainer) {
+        this._historyContainer.destroy();
+        this._historyContainer = null;
+      }
+    }, { once: true });
+  }
+
+  hideHistory() {
+    if (this._historyContainer) {
+      this._historyContainer.destroy();
+      this._historyContainer = null;
+    }
+  }
+
   /* ── Cleanup ───────────────────────────────── */
 
   destroy() {
+    this._cancelAutoAdvance();
     if (this._timer) this._timer.remove();
     if (this._arrowTween) this._arrowTween.destroy();
+    this.hideHistory();
     this.container.destroy();
   }
 }

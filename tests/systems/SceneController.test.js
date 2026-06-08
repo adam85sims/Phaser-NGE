@@ -51,10 +51,27 @@ function makeEnd(id, text, overrides = {}) {
   return { id, type: 'end', text, ...overrides };
 }
 
+function makeCallScene(id, sceneId, overrides = {}) {
+  return { id, type: 'call_scene', sceneId, ...overrides };
+}
+
 function createController(variableDefs) {
   Data.variables = variableDefs || {};
   const vars = new VariableSystem();
-  return new SceneController(vars);
+  
+  // Mock Phaser scene
+  const mockScene = {
+    time: {
+      delayedCall: vi.fn((delay, callback) => {
+        const id = setTimeout(callback, delay);
+        return {
+          remove: vi.fn(() => clearTimeout(id))
+        };
+      })
+    }
+  };
+  
+  return new SceneController(vars, mockScene);
 }
 
 function registerScene(scene) {
@@ -177,6 +194,46 @@ describe('SceneController', () => {
         music: 'ambient',
       });
     });
+
+    it('jumps to targetNodeId when provided', () => {
+      const scene = makeScene('s1', [
+        makeDialogue('entry', 'n', 'I am the entry'),
+        makeDialogue('target', 'n', 'I am the target'),
+        makeDialogue('other', 'n', 'I am other'),
+      ], 'entry');
+      registerScene(scene);
+
+      ctrl.startScene('s1', 'target');
+
+      expect(ctrl.currentNode.id).toBe('target');
+      expect(ctrl.currentNode.text).toBe('I am the target');
+    });
+
+    it('falls back to entryNode when targetNodeId is null', () => {
+      const scene = makeScene('s1', [
+        makeDialogue('entry', 'n', 'entry text'),
+        makeDialogue('other', 'n', 'other'),
+      ], 'entry');
+      registerScene(scene);
+
+      ctrl.startScene('s1', null);
+
+      expect(ctrl.currentNode.id).toBe('entry');
+    });
+
+    it('falls back to first node when targetNodeId is missing from scene', () => {
+      const scene = makeScene('s1', [
+        makeDialogue('entry', 'n', 'entry'),
+      ]);
+      registerScene(scene);
+
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      ctrl.startScene('s1', 'nonexistent_target');
+
+      // Should end the scene since the target doesn't exist
+      expect(ctrl.isRunning).toBe(false);
+      warn.mockRestore();
+    });
   });
 
   /* ── processNode ────────────────────── */
@@ -248,6 +305,38 @@ describe('SceneController', () => {
       expect(vs.get('score')).toBe(10);
     });
 
+    it('fires onBackgroundChange when node has background field', () => {
+      ctrl.isRunning = true;
+      const bgSpy = callbackSpy();
+      ctrl.onBackgroundChange = bgSpy;
+
+      const node = makeDialogue('d1', 'n', 'text', { background: 'forest' });
+      ctrl.processNode(node);
+
+      expect(bgSpy).toHaveBeenCalledWith('forest');
+    });
+
+    it('does NOT fire onBackgroundChange when node has no background field', () => {
+      ctrl.isRunning = true;
+      const bgSpy = callbackSpy();
+      ctrl.onBackgroundChange = bgSpy;
+
+      ctrl.processNode(makeDialogue('d1', 'n', 'text'));
+
+      expect(bgSpy).not.toHaveBeenCalled();
+    });
+
+    it('handles background change on all node types', () => {
+      ctrl.isRunning = true;
+      const bgSpy = callbackSpy();
+      ctrl.onBackgroundChange = bgSpy;
+
+      // Ensure it works on event nodes too
+      ctrl.processNode(makeEvent('e1', 'sfx', 'ping', { background: 'dungeon' }));
+
+      expect(bgSpy).toHaveBeenCalledWith('dungeon');
+    });
+
     it('does nothing when not running', () => {
       ctrl.isRunning = false;
       const spy = vi.spyOn(ctrl, 'showDialogue');
@@ -270,6 +359,7 @@ describe('SceneController', () => {
         speaker: 'hero',
         text: 'Hello world',
         expression: 'happy',
+        position: 'center',
         autoAdvance: false,
         waitTime: 0,
       });
@@ -388,6 +478,24 @@ describe('SceneController', () => {
       expect(choices[1].text).toBe('Coward');
       expect(choices[1].index).toBe(1);
     });
+
+    it('includes addFlag/delta/toggleFlag in choice mapping', () => {
+      const onChoice = callbackSpy();
+      ctrl.onChoice = onChoice;
+      ctrl.isRunning = true;
+
+      const node = makeChoice('c1', 'Stat change', [
+        { text: '+5 courage', addFlag: 'courage', delta: 5, next: 'a' },
+        { text: 'Toggle flag', toggleFlag: 'alert', next: 'b' },
+      ]);
+
+      ctrl.processNode(node);
+      expect(onChoice).toHaveBeenCalledTimes(1);
+      const choices = onChoice.mock.calls[0][0].choices;
+      expect(choices[0].addFlag).toBe('courage');
+      expect(choices[0].delta).toBe(5);
+      expect(choices[1].toggleFlag).toBe('alert');
+    });
   });
 
   /* ── evaluateCondition ───────────────── */
@@ -501,6 +609,27 @@ describe('SceneController', () => {
       }));
     });
 
+    it('includes addFlag/delta/toggleFlag in action payload', () => {
+      const onAction = callbackSpy();
+      ctrl.onAction = onAction;
+
+      ctrl.fireEvent({
+        id: 'e2',
+        type: 'event',
+        eventType: 'stat_change',
+        eventValue: null,
+        addFlag: 'courage',
+        delta: 5,
+        toggleFlag: 'alert',
+      });
+
+      expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
+        addFlag: 'courage',
+        delta: 5,
+        toggleFlag: 'alert',
+      }));
+    });
+
     it('follows next after event (via processNode + full scene)', () => {
       const scene = makeScene('e1', [   // scene id matches event node id
         makeEvent('e1', 'sfx', 'ping', { next: 'after_event' }),
@@ -519,6 +648,137 @@ describe('SceneController', () => {
       ctrl.fireEvent(makeEvent('e1', 'sfx', 'done'));
       expect(ctrl.isRunning).toBe(false);
       expect(onEnd).toHaveBeenCalled();
+    });
+  });
+
+  /* ── callScene ────────────────────────── */
+
+  describe('callScene', () => {
+
+    it('calls a sub-scene when processing call_scene node', () => {
+      const subScene = makeScene('sub', [
+        makeDialogue('entry', 'npc', 'Welcome to the shop'),
+      ], 'entry');
+      registerScene(subScene);
+
+      const mainScene = makeScene('main', [
+        makeCallScene('go_shop', 'sub', { next: 'after_shop' }),
+        makeDialogue('after_shop', 'n', 'Back in main'),
+      ], 'go_shop');
+      registerScene(mainScene);
+
+      ctrl.startScene('main');
+
+      // Should have jumped to the sub-scene
+      expect(ctrl.currentScene.id).toBe('sub');
+      expect(ctrl.currentNode.id).toBe('entry');
+      expect(ctrl.currentNode.text).toBe('Welcome to the shop');
+    });
+
+    it('returns to calling scene and jumps to return node when sub-scene ends', () => {
+      const subScene = makeScene('shop', [
+        makeDialogue('greet', 'npc', 'Hello!', { next: 'done' }),
+        makeEnd('done', 'See you'),
+      ], 'greet');
+      registerScene(subScene);
+
+      const mainScene = makeScene('main', [
+        makeDialogue('start', 'n', 'Entering shop', { next: 'go_shop' }),
+        makeCallScene('go_shop', 'shop', { next: 'after_shop' }),
+        makeDialogue('after_shop', 'n', 'Back from shop'),
+      ], 'start');
+      registerScene(mainScene);
+
+      ctrl.startScene('main');
+      expect(ctrl.currentNode.text).toBe('Entering shop');
+
+      ctrl.advance(); // → go_shop (call_scene) → sub-scene's greet
+      expect(ctrl.currentScene.id).toBe('shop');
+      expect(ctrl.currentNode.text).toBe('Hello!');
+
+      ctrl.advance(); // → shop's end node
+      // Should return to main scene at after_shop
+      expect(ctrl.currentScene.id).toBe('main');
+      expect(ctrl.currentNode.text).toBe('Back from shop');
+      expect(ctrl.isRunning).toBe(true);
+    });
+
+    it('handles nested call_scene (sub-scene calls another sub-scene)', () => {
+      const innScene = makeScene('inn', [
+        makeDialogue('inn_greet', 'innkeeper', 'Welcome to the inn', { next: 'inn_done' }),
+        makeEnd('inn_done', 'Inn done'),
+      ], 'inn_greet');
+      registerScene(innScene);
+
+      const shopScene = makeScene('shop', [
+        makeDialogue('shop_greet', 'merchant', 'Buy something!', { next: 'go_inn' }),
+        makeCallScene('go_inn', 'inn', { next: 'back_from_inn' }),
+        makeDialogue('back_from_inn', 'n', 'Back from inn to shop', { next: 'shop_done' }),
+        makeEnd('shop_done', 'Shop done'),
+      ], 'shop_greet');
+      registerScene(shopScene);
+
+      const mainScene = makeScene('main', [
+        makeDialogue('start', 'n', 'Begin', { next: 'call_shop' }),
+        makeCallScene('call_shop', 'shop', { next: 'after_all' }),
+        makeDialogue('after_all', 'n', 'All done!'),
+      ], 'start');
+      registerScene(mainScene);
+
+      ctrl.startScene('main');
+      ctrl.advance(); // → call_shop → shop's shop_greet
+      expect(ctrl.currentScene.id).toBe('shop');
+      expect(ctrl.currentNode.text).toBe('Buy something!');
+
+      ctrl.advance(); // → go_inn → inn's inn_greet
+      expect(ctrl.currentScene.id).toBe('inn');
+      expect(ctrl.currentNode.text).toBe('Welcome to the inn');
+
+      ctrl.advance(); // → inn's end → return to shop at back_from_inn
+      expect(ctrl.currentScene.id).toBe('shop');
+      expect(ctrl.currentNode.text).toBe('Back from inn to shop');
+
+      ctrl.advance(); // → shop's end → return to main at after_all
+      expect(ctrl.currentScene.id).toBe('main');
+      expect(ctrl.currentNode.text).toBe('All done!');
+    });
+
+    it('nextScene on end node overrides call stack return', () => {
+      const subScene = makeScene('shop', [
+        makeDialogue('greet', 'npc', 'Hello', { next: 'done' }),
+        makeEnd('done', 'Bye', { nextScene: 'final_scene' }),
+      ], 'greet');
+      registerScene(subScene);
+
+      const finalScene = makeScene('final_scene', [
+        makeDialogue('fin', 'n', 'The end'),
+      ], 'fin');
+      registerScene(finalScene);
+
+      const mainScene = makeScene('main', [
+        makeCallScene('go_shop', 'shop', { next: 'after_shop' }),
+        makeDialogue('after_shop', 'n', 'Should not reach'),
+      ], 'go_shop');
+      registerScene(mainScene);
+
+      // Wire the scene transition (as GameScene does)
+      ctrl.onSceneEnd = (data) => {
+        if (data.nextScene) ctrl.startScene(data.nextScene);
+      };
+
+      ctrl.startScene('main');
+      expect(ctrl.currentScene.id).toBe('shop');
+
+      ctrl.advance(); // → shop's end with nextScene = 'final_scene'
+      expect(ctrl.currentScene.id).toBe('final_scene');
+    });
+
+    it('warns and returns when call_scene has no sceneId', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      ctrl.isRunning = true;
+      ctrl.callScene({ id: 'bad', type: 'call_scene' });
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
     });
   });
 
@@ -794,6 +1054,51 @@ describe('SceneController', () => {
       // Choice option has no 'next' → advance() → node.next = 'fallback'
       expect(ctrl.currentNode.id).toBe('fallback');
     });
+
+    it('applies addFlag/delta from choice selection', () => {
+      Data.variables = { courage: { type: 'number', default: 50 } };
+      const vs = new VariableSystem();
+      ctrl = new SceneController(vs);
+
+      const scene = makeScene('s1', [
+        makeChoice('c1', 'Pick', [
+          { text: 'Be Brave', addFlag: 'courage', delta: 10, next: 'done' },
+          { text: 'Be Cautious', addFlag: 'courage', delta: -5, next: 'done' },
+        ]),
+        makeDialogue('done', 'n', 'done'),
+      ]);
+      registerScene(scene);
+      ctrl.startScene('s1');
+
+      expect(ctrl.isAtChoice).toBe(true);
+      ctrl.selectChoice(0); // Be Brave
+      expect(vs.get('courage')).toBe(60);
+
+      // Reload and pick the other
+      vs.set('courage', 50);
+      ctrl.startScene('s1');
+      ctrl.selectChoice(1); // Be Cautious
+      expect(vs.get('courage')).toBe(45);
+    });
+
+    it('applies toggleFlag from choice selection', () => {
+      Data.variables = { active: { type: 'boolean', default: false } };
+      const vs = new VariableSystem();
+      ctrl = new SceneController(vs);
+
+      const scene = makeScene('s1', [
+        makeChoice('c1', 'Pick', [
+          { text: 'Toggle', toggleFlag: 'active', next: 'done' },
+        ]),
+        makeDialogue('done', 'n', 'done'),
+      ]);
+      registerScene(scene);
+      ctrl.startScene('s1');
+
+      expect(vs.get('active')).toBe(false);
+      ctrl.selectChoice(0);
+      expect(vs.get('active')).toBe(true);
+    });
   });
 
   /* ── State properties ────────────────── */
@@ -845,11 +1150,13 @@ describe('SceneController', () => {
   describe('destroy', () => {
 
     it('clears the auto-timer (timer is disarmed)', () => {
-      // create a timer, store reference, destroy, verify timer was cleared
       const fn = vi.fn();
-      ctrl._autoTimer = setTimeout(fn, 9999);
+      ctrl._autoTimer = ctrl.scene.time.delayedCall(9999, fn);
+      const removeSpy = vi.spyOn(ctrl._autoTimer, 'remove');
+      
       ctrl.destroy();
-      // The timeout was cleared by destroy, so it shouldn't fire
+      
+      expect(removeSpy).toHaveBeenCalled();
       vi.advanceTimersByTime(9999);
       expect(fn).not.toHaveBeenCalled();
     });

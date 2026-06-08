@@ -20,13 +20,19 @@ export class GameScene extends Phaser.Scene {
     this.W = 800;
     this.H = 600;
 
+    // ── Check for scene data passed from MenuScene (Continue) ──
+    const initData = this.scene.settings.data || {};
+
     // ── Background ──
     this.bg = this.add.graphics();
     this._drawBackground(null);
 
     // ── Initialize systems ──
     this.vars = new VariableSystem();
-    this.sceneCtrl = new SceneController(this.vars);
+    if (initData.variables) {
+      this.vars.deserialize(initData.variables);
+    }
+    this.sceneCtrl = new SceneController(this.vars, this);
     this.dialogue = new DialogueSystem(this);
     this.characters = new CharacterSystem(this);
     this.saveSys = new SaveSystem(this.vars, this.sceneCtrl);
@@ -43,8 +49,8 @@ export class GameScene extends Phaser.Scene {
 
     // ── Start the game ──
     this._pendingEndText = null;
-    const startScene = this._getStartScene();
-    this.sceneCtrl.startScene(startScene);
+    const startScene = initData.loadScene || this._getStartScene();
+    this.sceneCtrl.startScene(startScene, initData.nodeId);
   }
 
   /* ── SCENE CONTROLLER WIRING ───────────────── */
@@ -54,7 +60,7 @@ export class GameScene extends Phaser.Scene {
 
     ctrl.onDialogue = (data) => {
       if (data.speaker) {
-        this.characters.show(data.speaker, data.expression || 'neutral', 'center');
+        this.characters.show(data.speaker, data.expression || 'neutral', data.position || 'center');
       }
 
       this.dialogue.showDialogue(
@@ -78,42 +84,20 @@ export class GameScene extends Phaser.Scene {
       this._drawBackground(data.background);
       this.cameras.main.fadeIn(400, 0, 0, 0);
       if (data.music) this.audio.playBGM(data.music);
+
+      // Auto-save on scene transition (slot 9)
+      this.saveSys.autoSave();
     };
 
     ctrl.onSceneEnd = (data) => {
-      this.dialogue.setVisible(false);
-      this.characters.hideAll();
-
-      // Remove any previous end text
-      if (this._pendingEndText) this._pendingEndText.destroy();
-
-      if (data.text) {
-        this._pendingEndText = this.add.text(
-          this.W / 2, this.H / 2, data.text, {
-            fontSize: '24px',
-            fontFamily: 'monospace',
-            color: '#ffd700'
-          }
-        ).setOrigin(0.5).setDepth(200);
-
-        this.tweens.add({
-          targets: this._pendingEndText,
-          alpha: 0.3,
-          duration: 1500,
-          yoyo: true,
-          repeat: -1
-        });
-      }
+      this._cleanupUI();
 
       // If the scene end specifies a next scene, transition after a pause
       if (data.nextScene) {
         this.time.addEvent({
           delay: 2500,
           callback: () => {
-            if (this._pendingEndText) this._pendingEndText.destroy();
-            this._pendingEndText = null;
-            this.dialogue.setVisible(false);
-            this.characters.hideAll();
+            this._cleanupUI();
             this.cameras.main.fadeOut(300, 0, 0, 0);
             this.cameras.main.once('camerafadeoutcomplete', () => {
               ctrl.startScene(data.nextScene);
@@ -132,6 +116,9 @@ export class GameScene extends Phaser.Scene {
           break;
         case 'bgm':
           this.audio.playBGM(data.value);
+          break;
+        case 'bg_change':
+          this._drawBackground(data.value);
           break;
         case 'camera_shake':
           const [dur, int] = (data.value || '200,0.005').split(',').map(Number);
@@ -167,6 +154,10 @@ export class GameScene extends Phaser.Scene {
       // Show a brief "..." indicator
       this.dialogue.setVisible(false);
     };
+
+    ctrl.onBackgroundChange = (key) => {
+      this._drawBackground(key);
+    };
   }
 
   /* ── INPUT ──────────────────────────────────── */
@@ -196,6 +187,53 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-F3', () => {
       this._switchScene('test-events');
     });
+
+    // Escape: return to menu
+    this.input.keyboard.on('keydown-ESC', () => {
+      this._cleanupUI();
+      this.dialogue.hideHistory();
+      this.cameras.main.fadeOut(300, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('MenuScene');
+      });
+    });
+
+    // H: toggle dialogue history
+    this.input.keyboard.on('keydown-H', () => {
+      this.dialogue.showHistory();
+    });
+
+    // S: toggle skip mode
+    this.input.keyboard.on('keydown-S', () => {
+      this.dialogue.toggleSkip();
+      this._showToast(this.dialogue.skipMode ? 'Skip: ON' : 'Skip: OFF');
+    });
+
+    // A: toggle auto mode
+    this.input.keyboard.on('keydown-A', () => {
+      this.dialogue.toggleAuto();
+      this._showToast(this.dialogue.autoMode ? 'Auto: ON' : 'Auto: OFF');
+    });
+
+    // F5: quick save (slot 0)
+    this.input.keyboard.on('keydown-F5', () => {
+      this.saveSys.quickSave();
+      this._showToast('Quick Saved');
+    });
+
+    // F9: quick load (slot 0)
+    this.input.keyboard.on('keydown-F9', () => {
+      const loaded = this.saveSys.quickLoad();
+      if (loaded && loaded.sceneId) {
+        this._cleanupUI();
+        this.cameras.main.fadeOut(200, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+          this.sceneCtrl.startScene(loaded.sceneId, loaded.nodeId);
+        });
+      } else {
+        this._showToast('No quick save found');
+      }
+    });
   }
 
   _handleAdvance() {
@@ -221,12 +259,7 @@ export class GameScene extends Phaser.Scene {
 
   _switchScene(sceneId) {
     // Clean up and switch to a different scene
-    this.dialogue.setVisible(false);
-    this.characters.hideAll();
-    if (this._pendingEndText) {
-      this._pendingEndText.destroy();
-      this._pendingEndText = null;
-    }
+    this._cleanupUI();
     this.cameras.main.fadeOut(200, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.sceneCtrl.startScene(sceneId);
@@ -236,6 +269,23 @@ export class GameScene extends Phaser.Scene {
   /* ── BACKGROUND ────────────────────────────── */
 
   _drawBackground(key) {
+    // Remove existing background sprite if any
+    if (this.bgSprite) {
+      this.bgSprite.destroy();
+      this.bgSprite = null;
+    }
+
+    // Try to load a background image
+    const texKey = key ? `bg_${key}` : null;
+    if (texKey && this.textures.exists(texKey)) {
+      this.bgSprite = this.add.image(this.W / 2, this.H / 2, texKey);
+      this.bgSprite.setDisplaySize(this.W, this.H);
+      this.bgSprite.setDepth(0);
+      this.bg.clear(); // Clear the gradient
+      return;
+    }
+
+    // Fallback to procedural gradient
     this.bg.clear();
     const colors = [0x0a0a1a, 0x0f0f2a, 0x1a0a2a];
     const steps = 60;
@@ -254,10 +304,34 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  _cleanupUI() {
+    this.dialogue.setVisible(false);
+    this.characters.hideAll();
+    if (this._pendingEndText) this._pendingEndText.destroy();
+    this._pendingEndText = null;
+  }
+
   /* ── START SCENE ───────────────────────────── */
 
   _getStartScene() {
     return Data.game?.startScene || 'sample';
+  }
+
+  /** Show a brief toast notification */
+  _showToast(text) {
+    const toast = this.add.text(400, 300, text, {
+      fontSize: '18px', fontFamily: 'monospace', color: '#ffffff',
+      backgroundColor: '#00000088', padding: { x: 16, y: 8 },
+    }).setOrigin(0.5).setDepth(500);
+
+    this.tweens.add({
+      targets: toast,
+      alpha: 0,
+      y: 280,
+      duration: 1200,
+      delay: 600,
+      onComplete: () => toast.destroy(),
+    });
   }
 
   /* ── CLEANUP ───────────────────────────────── */
@@ -266,5 +340,9 @@ export class GameScene extends Phaser.Scene {
     this.dialogue.destroy();
     this.characters.destroy();
     this.audio.destroy();
+    if (this.bgSprite) {
+      this.bgSprite.destroy();
+      this.bgSprite = null;
+    }
   }
 }

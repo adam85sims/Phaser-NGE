@@ -294,7 +294,7 @@ body {
   transition: height 0.2s;
   flex-shrink: 0;
 }
-#preview.open { height: 130px; }
+#preview.open { height: 340px; }
 #preview .header {
   display: flex;
   justify-content: space-between;
@@ -312,13 +312,13 @@ body {
   font-size: 11px;
 }
 #preview .preview-box {
-  margin: 8px 12px;
-  background: #0a0a1a;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 14px;
-  min-height: 60px;
-  position: relative;
+  position: absolute;
+  top: 28px; left: 0; right: 0; bottom: 0;
+  margin: 0;
+  background: #000;
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
 }
 #preview .preview-box .speaker {
   font-size: 12px;

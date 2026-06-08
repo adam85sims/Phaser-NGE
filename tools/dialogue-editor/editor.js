@@ -7,11 +7,11 @@
 
 const TYPE_COLORS = {
   dialogue: '#2563eb', choice: '#d97706', condition: '#7c3aed',
-  event: '#059669', wait: '#6b7280', end: '#dc2626'
+  event: '#059669', wait: '#6b7280', call_scene: '#f59e0b', end: '#dc2626'
 };
 const TYPE_LABELS = {
   dialogue: '💬 Dialogue', choice: '◇ Choice', condition: '△ Condition',
-  event: '⚡ Event', wait: '◻ Wait', end: '■ End'
+  event: '⚡ Event', wait: '◻ Wait', call_scene: '↻ Call Scene', end: '■ End'
 };
 
 let state = {
@@ -30,6 +30,8 @@ const NODE_W = 170, NODE_H = 44, PORT_R = 5;
 
 // Suppress auto-save after user dismisses draft restore dialog
 let _draftSuppressed = false;
+// Flag: was a draft restored this session?
+let _draftRestored = false;
 
 // ─── INIT ───────────────────────────────────────────────────
 
@@ -50,17 +52,21 @@ document.addEventListener('DOMContentLoaded', () => {
         state.allNodeIds = new Set(state.nodes.map(n => n.id));
         state.selectedNodeId = null;
         state.dirty = true;
+        _draftRestored = true;
         renderAll();
         setStatus('Restored draft', 'dirty');
         const sel = document.getElementById('scene-select');
         if (sel) sel.value = d.sceneId;
-        return;
+        // Don't return — the setTimeout will still fire, but _draftRestored
+        // tells it to skip loadGameData so the restore isn't overwritten
+      } else {
+        // User dismissed the restore dialog — clear draft and suppress future saves
+        localStorage.removeItem('dialogue_editor_draft');
+        _draftSuppressed = true;
       }
-      // User dismissed the restore dialog — clear draft and suppress future saves
+    } catch(e) { /* ignore corrupt draft */
       localStorage.removeItem('dialogue_editor_draft');
-      _draftSuppressed = true;
-    } catch(e) { /* ignore corrupt draft */ }
-    localStorage.removeItem('dialogue_editor_draft');
+    }
   }
 
   // Listen for project state from the integrated editor (postMessage)
@@ -79,6 +85,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setTimeout(() => {
     if (!parentMsgReceived) {
+      // If a draft was restored, we already have scene data — skip reloading
+      if (_draftRestored) {
+        populateSceneList();
+        _draftRestored = false;
+        _draftSuppressed = false; // re-enable auto-save now that scene is set
+        return;
+      }
       loadGameData(); // fallback: load from disk (standalone mode)
     }
   }, 300);
@@ -126,6 +139,10 @@ async function loadGameData() {
     state.characters = chars;
     state.variableDefs = vars;
 
+    // Validate and clear stale draft — if the data on disk differs from the
+    // draft's project, the draft belongs to a different project and is stale.
+    _validateDraft(game);
+
     const sel = document.getElementById('scene-select');
     sel.innerHTML = '';
     (game.scenes || []).forEach(id => {
@@ -160,6 +177,7 @@ async function loadScene(sceneId) {
       if (n.x === undefined) n.x = 400 + Math.random() * 60;
       if (n.y === undefined) n.y = 30 + i * 100;
     });
+    fitView();
     renderAll();
     setStatus(`Scene: ${sceneId} (${state.nodes.length} nodes)`, 'saved');
     document.getElementById('scene-select').value = sceneId;
@@ -230,6 +248,7 @@ function applySceneData(sceneId, data) {
     if (n.x === undefined) n.x = 400 + Math.random() * 60;
     if (n.y === undefined) n.y = 30 + i * 100;
   });
+  fitView();
   renderAll();
   setStatus(`Scene: ${sceneId} (${state.nodes.length} nodes)`, 'saved');
   const sel = document.getElementById('scene-select');
@@ -238,6 +257,9 @@ function applySceneData(sceneId, data) {
 
 function onSceneSelect(e) {
   if (state.dirty && !confirm('Discard unsaved changes?')) return;
+  // Clear any stale draft when explicitly switching scenes
+  localStorage.removeItem('dialogue_editor_draft');
+  _draftSuppressed = false;
   loadScene(e.target.value);
 }
 
@@ -400,6 +422,13 @@ function renderCanvas() {
     ctx.fillStyle = color;
     ctx.font = `${9 * state.zoom}px sans-serif`;
     ctx.fillText(node.type.toUpperCase(), s.x + 8 * state.zoom, s.y + 35 * state.zoom);
+
+    // Comment indicator
+    if (node.comment) {
+      ctx.fillStyle = '#fde047';
+      ctx.font = `${10 * state.zoom}px sans-serif`;
+      ctx.fillText('📝', s.x + sw - 20 * state.zoom, s.y + 22 * state.zoom);
+    }
 
     // Preview snippet
     let snippet = '';
@@ -617,6 +646,10 @@ function renderEditor() {
     <select onchange="window.__updateType(this.value)">
       ${Object.entries(TYPE_LABELS).map(([k,v]) => `<option value="${k}"${node.type===k?' selected':''}>${v}</option>`).join('')}
     </select>
+  </div>
+  <div class="form-group">
+    <label>Comment (internal)</label>
+    <textarea style="height:40px;opacity:0.7;font-size:11px" placeholder="Writer's notes..." onchange="window.__updateField('comment',this.value)">${(node.comment||'').replace(/</g,'&lt;')}</textarea>
   </div>`;
 
   switch (node.type) {
@@ -660,6 +693,12 @@ function renderEditor() {
     case 'wait':
       html += `<div class="form-group"><label>Duration (ms)</label><input type="number" value="${node.duration||1000}" onchange="window.__updateField('duration',+this.value||1000)"/></div>
         <div class="form-group"><label>Next</label><select onchange="window.__updateField('next',this.value)"><option value="">— none —</option>${nodeOpts}</select></div>`;
+      break;
+    case 'call_scene':
+      html += `<div class="form-group"><label>Sub-scene ID</label>
+        <input value="${(node.sceneId||'').replace(/</g,'&lt;')}" onchange="window.__updateField('sceneId',this.value)" placeholder="e.g. shop_scene"/></div>
+        <div class="form-group"><label>Return Node</label><select onchange="window.__updateField('next',this.value)"><option value="">— entry node —</option>${nodeOpts}</select></div>
+        <div class="form-group"><label>Background</label><input value="${node.background||''}" onchange="window.__updateField('background',this.value)" placeholder="optional bg key"/></div>`;
       break;
     case 'end':
       html += `<div class="form-group"><label>Ending text</label><input value="${(node.text||'').replace(/</g,'&lt;')}" onchange="window.__updateField('text',this.value)"/></div>
@@ -809,6 +848,9 @@ function deleteNode() {
 function newScene() {
   const id = prompt('Scene ID:', 'new_scene_' + Date.now());
   if (!id) return;
+  // Creating a fresh scene — clear any stale draft from old projects
+  localStorage.removeItem('dialogue_editor_draft');
+  _draftSuppressed = false;
   state.nodes = [{ id: 'start', type: 'dialogue', speaker: 'narrator', text: 'Start writing here.', x: 400, y: 30 }];
   state.allNodeIds = new Set(['start']);
   state.sceneId = id;
@@ -835,7 +877,10 @@ function deleteScene() {
   if (sel.options.length > 0) {
     sel.selectedIndex = Math.min(idx, sel.options.length - 1);
     loadScene(sel.value);
-  } else newScene();
+  } else {
+    localStorage.removeItem('dialogue_editor_draft');
+    newScene();
+  }
 }
 
 // ─── EXPORT ────────────────────────────────────────────────
@@ -848,8 +893,10 @@ function exportScene() {
     music: state.sceneData?.music || null,
     nodes: state.nodes.map(n => {
       const c = { ...n };
+      const comment = c.comment;
       // Strip empty fields
       Object.keys(c).forEach(k => { if (c[k] === null || c[k] === undefined || c[k] === '' || (k === 'choices' && Array.isArray(c[k]) && c[k].length === 0)) delete c[k]; });
+      if (comment) c.comment = comment;
       if (c.choices) c.choices = c.choices.filter(x => x.text).map(x => { Object.keys(x).forEach(k => { if (!x[k] && k !== 'text') delete x[k]; }); return x; });
       if (!c.setFlag) { delete c.setFlag; delete c.setValue; }
       c.x = Math.round(c.x) || 400; c.y = Math.round(c.y) || 30;
@@ -857,15 +904,30 @@ function exportScene() {
     })
   };
 
+  // Download the scene file
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = state.sceneId + '.json';
   a.click();
   URL.revokeObjectURL(url);
+
+  // Save the full project state to localStorage so the main game
+  // (BootScene) can read it instead of stale disk files
+  try {
+    localStorage.setItem('nge_editor_data', JSON.stringify({
+      game: state.gameConfig || { scenes: [state.sceneId], title: 'Game', defaults: {} },
+      characters: state.characters || {},
+      variables: state.variableDefs || {},
+      scenes: { [state.sceneId]: data }
+    }));
+  } catch(e) {
+    console.warn('Failed to save project data to localStorage (may be too large):', e);
+  }
+
   state.dirty = false;
   _draftSuppressed = false;
-  setStatus('Exported: ' + state.sceneId + '.json', 'saved');
+  setStatus('Exported: ' + state.sceneId + '.json (saved to game)', 'saved');
 }
 
 // ─── AUTO LAYOUT ────────────────────────────────────────────
@@ -895,38 +957,72 @@ function zoomOut() { state.zoom = Math.max(0.3, state.zoom / 1.2); }
 
 // ─── PREVIEW ───────────────────────────────────────────────
 
+let _previewIframe = null;
+let _previewReady = false;
+
 function togglePreview() {
   state.previewOpen = !state.previewOpen;
-  document.getElementById('preview').className = state.previewOpen ? 'open' : '';
-  updatePreview();
+  const preview = document.getElementById('preview');
+  preview.className = state.previewOpen ? 'open' : '';
+
+  if (state.previewOpen) {
+    // Create iframe lazily
+    if (!_previewIframe) {
+      _previewIframe = document.createElement('iframe');
+      _previewIframe.src = 'preview.html';
+      _previewIframe.style.cssText = 'width:100%;height:100%;border:none;background:#000';
+      _previewIframe.setAttribute('title', 'Scene Preview');
+      const box = document.getElementById('preview-box');
+      box.innerHTML = '';
+      box.appendChild(_previewIframe);
+
+      // Wait for preview page to signal ready
+      window.addEventListener('message', function onReady(e) {
+        if (e.data?.type === 'preview-ready') {
+          _previewReady = true;
+          window.removeEventListener('message', onReady);
+          sendPreviewData();
+        }
+      });
+    } else {
+      sendPreviewData();
+    }
+  }
+}
+
+function sendPreviewData() {
+  if (!state.previewOpen || !_previewIframe || !_previewReady) return;
+
+  // Build the scene data from current editor state
+  const sceneData = {
+    id: state.sceneId || 'preview',
+    entryNode: state.nodes[0]?.id || 'start',
+    background: state.sceneData?.background || null,
+    music: state.sceneData?.music || null,
+    nodes: state.nodes.map(n => {
+      const c = { ...n };
+      // Strip empty fields for cleaner data
+      Object.keys(c).forEach(k => {
+        if (c[k] === null || c[k] === undefined || c[k] === '' ||
+            (k === 'choices' && Array.isArray(c[k]) && c[k].length === 0)) delete c[k];
+      });
+      if (c.choices) c.choices = c.choices.filter(x => x.text);
+      return c;
+    })
+  };
+
+  _previewIframe.contentWindow.postMessage({
+    type: 'preview-update',
+    scene: sceneData,
+    characters: state.characters || {},
+    variables: state.variableDefs || {},
+    game: state.gameConfig || { scenes: [state.sceneId] }
+  }, '*');
 }
 
 function updatePreview() {
-  if (!state.previewOpen) return;
-  const node = state.nodes.find(n => n.id === state.selectedNodeId);
-  const box = document.getElementById('preview-box');
-  const speaker = document.getElementById('preview-speaker');
-  const text = document.getElementById('preview-text');
-  if (!box || !speaker || !text) return;
-
-  if (!node) { speaker.innerHTML = ''; text.innerHTML = '<span style="color:var(--text-dim)">Select a node</span>'; return; }
-
-  if (node.type === 'dialogue') {
-    const charData = state.characters[node.speaker];
-    speaker.innerHTML = node.speaker && charData?.name
-      ? `<span style="color:${charData.color||'#fff'}">${charData.name}</span>`
-      : '<span style="color:var(--text-dim)">Narration</span>';
-    text.innerHTML = (node.text||'').replace(/\n/g,'<br>') + '<span class="cursor"></span>';
-  } else if (node.type === 'choice') {
-    speaker.innerHTML = `<span style="color:var(--node-choice)">${node.prompt||'Choose:'}</span>`;
-    text.innerHTML = '<div class="choice-list">' + (node.choices||[]).map((c,i) => `<div class="choice-item">[${i+1}] ${c.text||'...'}</div>`).join('') + '</div>';
-  } else if (node.type === 'end') {
-    speaker.innerHTML = '<span style="color:var(--node-end)">Scene End</span>';
-    text.innerHTML = node.text || 'The End';
-  } else {
-    speaker.innerHTML = '';
-    text.innerHTML = `<span style="color:var(--text-dim)">${node.type.toUpperCase()}${node.next?' → '+node.next:''}</span>`;
-  }
+  // Call sendPreviewData whenever the scene changes
+  sendPreviewData();
 }
 
 // ─── UI HELPERS ─────────────────────────────────────────────
@@ -943,7 +1039,8 @@ function markDirty() {
   try {
     localStorage.setItem('dialogue_editor_draft', JSON.stringify({
       sceneId: state.sceneId, nodes: state.nodes, gameConfig: state.gameConfig,
-      characters: state.characters, variableDefs: state.variableDefs
+      characters: state.characters, variableDefs: state.variableDefs,
+      projectId: state.gameConfig?.title || state.gameConfig?.scenes?.[0] || 'unknown'
     }));
   } catch(e) { /* storage full, ignore */ }
 }
@@ -953,4 +1050,42 @@ function setStatus(text, dotClass) {
   const dot = document.getElementById('status-dot');
   if (el) el.textContent = text;
   if (dot) dot.className = 'dot ' + dotClass;
+}
+
+/** Populate the scene-select dropdown from state.gameConfig */
+function populateSceneList() {
+  const sel = document.getElementById('scene-select');
+  if (!sel) return;
+  sel.innerHTML = '';
+  (state.gameConfig?.scenes || []).forEach(id => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id;
+    sel.appendChild(opt);
+  });
+  if (state.sceneId && sel.querySelector(`option[value="${state.sceneId}"]`)) {
+    sel.value = state.sceneId;
+  } else if (sel.options.length > 0) {
+    sel.value = sel.options[0].value;
+  }
+}
+
+/**
+ * Validate stored draft against the loaded project.
+ * If the draft's project doesn't match the project on disk,
+ * silently clear it to prevent cross-project restoration prompts.
+ */
+function _validateDraft(loadedGame) {
+  const raw = localStorage.getItem('dialogue_editor_draft');
+  if (!raw) return;
+  try {
+    const draft = JSON.parse(raw);
+    const loadedProjectId = loadedGame?.title || loadedGame?.scenes?.[0] || 'unknown';
+    if (draft.projectId !== loadedProjectId) {
+      localStorage.removeItem('dialogue_editor_draft');
+      _draftSuppressed = false;
+    }
+  } catch(e) {
+    localStorage.removeItem('dialogue_editor_draft');
+  }
 }

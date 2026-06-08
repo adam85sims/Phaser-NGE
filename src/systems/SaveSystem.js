@@ -31,7 +31,6 @@ export class SaveSystem {
       title: `Save ${slotIndex + 1}`,
       sceneId: this.sceneCtrl.currentScene?.id || null,
       nodeId: this.sceneCtrl.currentNode?.id || null,
-      nodeIndex: this.sceneCtrl.nodeIndex,
       variables: this.vars.serialize()
     };
 
@@ -51,17 +50,32 @@ export class SaveSystem {
     // Return scene info so the game can navigate there
     return {
       sceneId: data.sceneId,
-      nodeIndex: data.nodeIndex || 0
+      nodeId: data.nodeId
     };
   }
 
-  /** Delete a slot */
+  /** Delete a save slot */
   delete(slotIndex) {
     const slots = this.getSlots();
     if (slots[slotIndex]) {
       delete slots[slotIndex];
       localStorage.setItem(this.SAVE_KEY, JSON.stringify(slots));
     }
+  }
+
+  /** Quick save to slot 0 */
+  quickSave() {
+    return this.save(0);
+  }
+
+  /** Quick load from slot 0 */
+  quickLoad() {
+    return this.load(0);
+  }
+
+  /** Auto-save to slot 9 */
+  autoSave() {
+    return this.save(9);
   }
 
   /** Format a timestamp for display */

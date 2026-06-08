@@ -272,6 +272,84 @@ describe('VariableSystem', () => {
       expect(vs.evaluate('items < 0')).toBe(true);
       expect(vs.evaluate('items == -5')).toBe(true);
     });
+
+    /* ── Compound conditions (AND/OR) ── */
+
+    it('evaluates AND — both true', () => {
+      expect(vs.evaluate('courage >= 30 AND courage <= 70')).toBe(true);
+    });
+
+    it('evaluates AND — one false', () => {
+      expect(vs.evaluate('courage >= 30 AND courage <= 40')).toBe(false);
+    });
+
+    it('evaluates AND — both false', () => {
+      expect(vs.evaluate('courage >= 100 AND courage <= 10')).toBe(false);
+    });
+
+    it('evaluates OR — both true', () => {
+      expect(vs.evaluate('courage >= 30 OR courage <= 70')).toBe(true);
+    });
+
+    it('evaluates OR — one true', () => {
+      expect(vs.evaluate('courage >= 100 OR courage <= 70')).toBe(true);
+    });
+
+    it('evaluates OR — both false', () => {
+      expect(vs.evaluate('courage >= 100 OR courage <= 10')).toBe(false);
+    });
+
+    it('AND has higher precedence than OR', () => {
+      // "false OR (true AND true)" = true
+      // Without precedence: "(false OR true) AND true" = true (same result here)
+      // Better test: "false OR (false AND true)" = false
+      // vs "(false OR false) AND true" = false
+      // Let's use: "true OR (false AND false)" = true
+      // vs "(true OR false) AND false" = false
+      vs.set('a', true);
+      vs.set('b', false);
+      vs.set('c', false);
+      // "a == true OR b == true AND c == false"
+      // = "a == true OR (b == true AND c == false)"
+      // = "true OR (false AND true)"
+      // = "true OR false"
+      // = true
+      expect(vs.evaluate('a == true OR b == true AND c == false')).toBe(true);
+    });
+
+    it('handles parentheses to override precedence', () => {
+      vs.set('a', true);
+      vs.set('b', false);
+      vs.set('c', false);
+      // "(a == true OR b == true) AND c == false"
+      // = "(true OR false) AND true"
+      // = "true AND true"
+      // = true
+      expect(vs.evaluate('(a == true OR b == true) AND c == false')).toBe(true);
+    });
+
+    it('handles nested parentheses', () => {
+      // "((courage >= 30))" — double parens around single condition
+      expect(vs.evaluate('((courage >= 30))')).toBe(true);
+    });
+
+    it('handles multiple ANDs chained', () => {
+      expect(vs.evaluate('courage >= 30 AND courage <= 70 AND courage == 50')).toBe(true);
+      expect(vs.evaluate('courage >= 30 AND courage <= 70 AND courage == 99')).toBe(false);
+    });
+
+    it('handles multiple ORs chained', () => {
+      expect(vs.evaluate('courage == 10 OR courage == 50 OR courage == 90')).toBe(true);
+      expect(vs.evaluate('courage == 10 OR courage == 20 OR courage == 90')).toBe(false);
+    });
+
+    it('handles mixed AND/OR with different variables', () => {
+      vs.set('has_key', false);
+      expect(vs.evaluate('courage >= 50 AND has_key == true')).toBe(false);
+      expect(vs.evaluate('courage >= 50 OR has_key == true')).toBe(true);
+      vs.set('has_key', true);
+      expect(vs.evaluate('courage >= 50 AND has_key == true')).toBe(true);
+    });
   });
 
   /* ── applyAction ───────────────── */

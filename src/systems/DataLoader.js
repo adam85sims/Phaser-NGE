@@ -8,6 +8,7 @@ export const Data = {
   characters: null,
   variables: null,
   scenes: {},
+  theme: null,
 
   getScene(id) {
     return this.scenes[id] || null;

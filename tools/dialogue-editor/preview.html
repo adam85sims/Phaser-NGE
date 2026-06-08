@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scene Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
+  #game-container { width: 800px; height: 600px; transform-origin: top left; }
+  #status {
+    position: absolute; bottom: 8px; right: 10px;
+    font: 10px monospace; color: #444; opacity: 0.5;
+  }
+</style>
+</head>
+<body>
+<div id="game-container"></div>
+<div id="status">Preview — idle</div>
+<script type="module">
+import Phaser from 'phaser';
+import { Data } from '../../src/systems/DataLoader.js';
+import { SceneController } from '../../src/systems/SceneController.js';
+import { VariableSystem } from '../../src/systems/VariableSystem.js';
+
+const CONTAINER = document.getElementById('game-container');
+const STATUS = document.getElementById('status');
+
+/* ── Minimal Preview Scene ────────────────── */
+
+class PreviewScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'PreviewScene' });
+    this.ctrl = null;
+    this.vars = null;
+  }
+
+  create() {
+    this.W = 800;
+    this.H = 600;
+
+    // Background
+    this.bg = this.add.graphics();
+    this._drawBg();
+
+    // Dialogue box
+    this.dialogueBg = this.add.graphics();
+    this._drawTextBox();
+
+    // Speaker nameplate
+    this.nameplate = this.add.text(50, 430, '', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#ffffff',
+      backgroundColor: '#222244', padding: { x: 8, y: 4 }
+    }).setDepth(10);
+
+    // Dialogue text
+    this.text = this.add.text(50, 460, '', {
+      fontSize: '16px', fontFamily: 'monospace', color: '#e0e0e0',
+      wordWrap: { width: 700 }, lineSpacing: 4
+    }).setDepth(10);
+
+    // Continue arrow
+    this.arrow = this.add.text(730, 540, '▼', {
+      fontSize: '12px', fontFamily: 'monospace', color: '#00ccff'
+    }).setOrigin(1, 1).setDepth(10).setAlpha(0);
+
+    // Choice container
+    this.choiceTexts = [];
+
+    // Status overlay (top-left)
+    this.sceneLabel = this.add.text(8, 8, '', {
+      fontSize: '10px', fontFamily: 'monospace', color: '#444'
+    }).setDepth(100);
+
+    // Wait for data
+    this._pendingData = null;
+
+    // Listen for scene data from parent
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'preview-update') {
+        this._loadData(e.data);
+      }
+    });
+
+    // If data arrived before scene was ready
+    if (window.__pendingPreviewData) {
+      this._loadData(window.__pendingPreviewData);
+      delete window.__pendingPreviewData;
+    }
+  }
+
+  _loadData(data) {
+    // Set up Data store
+    Data.game = data.game || { scenes: [data.scene?.id || 'preview'], defaults: {} };
+    Data.characters = data.characters || {};
+    Data.variables = data.variables || {};
+    Data.theme = null;
+    Data.scenes = {};
+
+    const sceneData = data.scene;
+    if (!sceneData || !sceneData.nodes || sceneData.nodes.length === 0) {
+      this._showError('No nodes in scene');
+      return;
+    }
+
+    // Register the scene so SceneController can find it
+    Data.scenes[sceneData.id || 'preview'] = sceneData;
+
+    const statusText = `${sceneData.id || 'preview'} (${sceneData.nodes.length} nodes)`;
+    STATUS.textContent = `Preview — ${statusText}`;
+    this.sceneLabel.setText(statusText);
+
+    // Boot the controller
+    this.vars = new VariableSystem();
+    this.ctrl = new SceneController(this.vars, this);
+    this._wireController();
+    this.ctrl.startScene(sceneData.id || 'preview');
+  }
+
+  _wireController() {
+    const ctrl = this.ctrl;
+
+    ctrl.onDialogue = (d) => {
+      this._showDialogue(d);
+    };
+
+    ctrl.onChoice = (d) => {
+      this._hideDialogue();
+      this._showChoices(d);
+    };
+
+    ctrl.onSceneStart = (d) => {
+      this.text.setText('');
+      this.nameplate.setText('');
+      this.arrow.setAlpha(0);
+      this._clearChoices();
+    };
+
+    ctrl.onSceneEnd = (d) => {
+      this.text.setText(`[ ${d.text || 'END'} ]`);
+      this.nameplate.setText('');
+      this.arrow.setAlpha(0);
+      this._clearChoices();
+    };
+
+    ctrl.onWait = () => {
+      this.text.setText('...');
+      this.arrow.setAlpha(0);
+    };
+
+    ctrl.onAction = (d) => {
+      // Just show a toast for events
+      if (d.type) {
+        this.sceneLabel.setText(`${d.type}${d.value ? ': ' + d.value : ''}`);
+      }
+    };
+
+    ctrl.onBackgroundChange = () => {
+      // Not rendering backgrounds in preview
+    };
+  }
+
+  _showDialogue(d) {
+    this._clearChoices();
+    const charData = Data.getCharacter(d.speaker);
+    if (d.speaker && charData?.name) {
+      this.nameplate.setText(charData.name);
+      this.nameplate.setStyle({ color: charData.color || '#ffffff' });
+    } else if (d.speaker) {
+      this.nameplate.setText(d.speaker);
+    } else {
+      this.nameplate.setText('Narrator');
+    }
+    this.text.setText(d.text || '');
+    this.arrow.setAlpha(d.autoAdvance ? 0 : 1);
+  }
+
+  _showChoices(d) {
+    this._clearChoices();
+    this.text.setText(d.prompt || 'Choose:');
+
+    const startY = 490;
+    d.choices.forEach((c, i) => {
+      const t = this.add.text(70, startY + i * 28, `[${i + 1}] ${c.text}`, {
+        fontSize: '15px', fontFamily: 'monospace', color: '#00ccff'
+      }).setDepth(10).setInteractive({ useHandCursor: true });
+      t.on('pointerdown', () => {
+        this._clearChoices();
+        this.ctrl.selectChoice(i);
+      });
+      this.choiceTexts.push(t);
+    });
+  }
+
+  _hideDialogue() {
+    this.text.setText('');
+    this.nameplate.setText('');
+    this.arrow.setAlpha(0);
+  }
+
+  _clearChoices() {
+    this.choiceTexts.forEach(t => t.destroy());
+    this.choiceTexts = [];
+  }
+
+  _drawBg() {
+    const g = this.bg;
+    g.clear();
+    const colors = [0x0a0a1a, 0x0f0f2a, 0x1a0a2a];
+    const steps = 60;
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const ci = t < 0.5 ? 0 : (t < 0.8 ? 1 : 2);
+      const next = ci < 2 ? ci + 1 : ci;
+      const lt = (t - ci * 0.5) * 2;
+      const color = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.IntegerToColor(colors[ci]),
+        Phaser.Display.Color.IntegerToColor(colors[next]), 100, lt * 100
+      );
+      g.fillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1);
+      g.fillRect(0, (i / steps) * this.H, this.W, this.H / steps + 1);
+    }
+  }
+
+  _drawTextBox() {
+    const g = this.dialogueBg;
+    g.clear();
+    g.fillStyle(0x000000, 0.5);
+    g.fillRoundedRect(30, 420, 740, 140, 8);
+    g.lineStyle(2, 0x335588, 0.4);
+    g.strokeRoundedRect(30, 420, 740, 140, 8);
+  }
+
+  _showError(msg) {
+    STATUS.textContent = `Preview — ${msg}`;
+    if (this.text) this.text.setText(`[ ${msg} ]`);
+  }
+
+  shutdown() {
+    if (this.ctrl) this.ctrl.destroy();
+  }
+}
+
+/* ── Boot Phaser ──────────────────────────── */
+
+const game = new Phaser.Game({
+  type: Phaser.AUTO,
+  parent: CONTAINER,
+  width: 800,
+  height: 600,
+  backgroundColor: '#0a0a1a',
+  scene: [PreviewScene],
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  }
+});
+
+/* ── Catch data sent before page loaded ──── */
+
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'preview-update') {
+    // Phaser might already have picked it up via the scene listener,
+    // but just in case the scene wasn't ready yet, store it
+    if (!game.scene.isActive('PreviewScene')) {
+      window.__pendingPreviewData = e.data;
+    }
+  }
+});
+
+// Tell parent we're ready
+window.parent.postMessage({ type: 'preview-ready' }, '*');
+</script>
+</body>
+</html>

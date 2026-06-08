@@ -5,14 +5,19 @@ import { Data } from './DataLoader.js';
  *
  * Walks a scene's node graph by following 'next' connections
  * from each node. Entry point is scene.entryNode.
+ * Supports sub-scene calls via call_scene nodes (call stack).
  * No sequential advancement — every transition is an explicit jump.
  */
 export class SceneController {
-  constructor(variableSystem) {
+  constructor(variableSystem, scene) {
     this.vars = variableSystem;
+    this.scene = scene;
     this.currentScene = null;
     this.currentNode = null;
     this.isRunning = false;
+
+    // Call stack for call_scene sub-scene returns
+    this._callStack = [];
 
     // Callbacks — set by GameScene
     this.onDialogue = null;     // fn({ speaker, text, expression })
@@ -21,11 +26,12 @@ export class SceneController {
     this.onAction = null;       // fn({ type, ... })
     this.onSceneStart = null;   // fn({ sceneId, background, music })
     this.onWait = null;         // fn({ duration })
+    this.onBackgroundChange = null;  // fn(backgroundKey)
   }
 
   /* ── Scene Loading ─────────────────────────── */
 
-  startScene(sceneId) {
+  startScene(sceneId, targetNodeId = null) {
     const scene = Data.getScene(sceneId);
     if (!scene) {
       console.warn(`Scene not found: ${sceneId}`);
@@ -43,13 +49,34 @@ export class SceneController {
       });
     }
 
-    // Start at the entry node
-    const entryId = scene.entryNode || scene.nodes?.[0]?.id;
-    if (entryId) {
-      this.jumpToId(entryId);
+    // Start at the target node or fall back to entry
+    const nodeId = targetNodeId || (scene.entryNode || scene.nodes?.[0]?.id);
+    if (nodeId) {
+      this.jumpToId(nodeId);
     } else {
       this.endScene();
     }
+  }
+
+  /**
+   * Call a sub-scene, saving the current position on the call stack.
+   * When the sub-scene ends, control returns to this scene at the
+   * specified return node (or the node following this one).
+   */
+  callScene(node) {
+    if (!node.sceneId) {
+      console.warn('callScene: no sceneId specified');
+      return;
+    }
+
+    // Save current position — returnNode is the node to jump to when we come back
+    this._callStack.push({
+      scene: this.currentScene,
+      returnNode: node.next || null
+    });
+
+    // Start the sub-scene from its entry
+    this.startScene(node.sceneId);
   }
 
   /* ── Node Processing ───────────────────────── */
@@ -61,6 +88,11 @@ export class SceneController {
 
     // Apply any variable actions attached to this node
     this.vars.applyAction(node);
+
+    // Any node can trigger a background change via a `background` field
+    if (node.background !== undefined && this.onBackgroundChange) {
+      this.onBackgroundChange(node.background);
+    }
 
     switch (node.type) {
       case 'dialogue':
@@ -78,12 +110,76 @@ export class SceneController {
       case 'wait':
         this.doWait(node);
         break;
+      case 'call_scene':
+        this.callScene(node);
+        break;
       case 'end':
         this.endScene(node);
         break;
       default:
         console.warn(`Unknown node type: ${node.type}`);
         this.advance();
+    }
+  }
+
+  /* ── Scenes ─────────────────────────────────── */
+
+  /**
+   * End the current scene. If we're in a sub-scene (call stack non-empty),
+   * pop the stack and return to the caller instead.
+   * If the end node specifies nextScene, that takes priority over the call stack.
+   */
+  endScene(node) {
+    // Pop the call stack — check if we need to return to a caller
+    // nextScene on the end node takes priority over call stack returns
+    if (node?.nextScene) {
+      // Explicit scene transition — clear stack and go
+      this._callStack = [];
+      this.isRunning = false;
+      if (this.onSceneEnd) {
+        this.onSceneEnd({ text: node?.text || null, nextScene: node.nextScene });
+      }
+      return;
+    }
+
+    // If there's a return point on the call stack, go back
+    if (this._callStack.length > 0) {
+      const pop = this._callStack.pop();
+      // Restore the calling scene
+      this.currentScene = pop.scene;
+      this.isRunning = true;
+
+      // Notify UI layer to restore scene visuals (background, music)
+      if (this.onSceneStart) {
+        this.onSceneStart({
+          sceneId: pop.scene.id,
+          background: pop.scene.background,
+          music: pop.scene.music
+        });
+      }
+
+      // Jump to the return node, or advance if no return node specified
+      if (pop.returnNode) {
+        this.jumpToId(pop.returnNode);
+      } else {
+        // No return node — try to advance from where we left off
+        if (this.currentNode?.next) {
+          this.jumpToId(this.currentNode.next);
+        } else {
+          // Can't return — start at entry
+          this.startScene(pop.scene.id);
+        }
+      }
+      return;
+    }
+
+    // Genuine end — no call stack, no nextScene
+    this.isRunning = false;
+    if (this.onSceneEnd) {
+      this.onSceneEnd({
+        text: node?.text || null,
+        nextScene: null
+      });
     }
   }
 
@@ -95,15 +191,16 @@ export class SceneController {
         speaker: node.speaker,
         text: node.text,
         expression: node.expression || null,
+        position: node.position || 'center',
         autoAdvance: node.autoAdvance || false,
         waitTime: node.waitTime || 0
       });
     }
 
     if (node.autoAdvance) {
-      this._autoTimer = setTimeout(() => {
+      this._autoTimer = this.scene.time.delayedCall(node.waitTime || 2000, () => {
         this.advance();
-      }, node.waitTime || 2000);
+      });
     }
     // Otherwise, wait for player input → calls advance()
   }
@@ -131,7 +228,10 @@ export class SceneController {
           next: c.next,
           nextScene: c.nextScene,
           setFlag: c.setFlag,
-          setValue: c.setValue
+          setValue: c.setValue,
+          toggleFlag: c.toggleFlag,
+          addFlag: c.addFlag,
+          delta: c.delta
         }))
       });
     }
@@ -156,7 +256,10 @@ export class SceneController {
         type: node.eventType || 'sfx',
         value: node.eventValue || null,
         setFlag: node.setFlag,
-        setValue: node.setValue
+        setValue: node.setValue,
+        toggleFlag: node.toggleFlag,
+        addFlag: node.addFlag,
+        delta: node.delta
       });
     }
 
@@ -174,20 +277,10 @@ export class SceneController {
       this.onWait({ duration });
     }
 
-    this._autoTimer = setTimeout(() => {
+    this._autoTimer = this.scene.time.delayedCall(duration, () => {
       if (node.next) this.jumpToId(node.next);
       else this.endScene();
-    }, duration);
-  }
-
-  endScene(node) {
-    this.isRunning = false;
-    if (this.onSceneEnd) {
-      this.onSceneEnd({
-        text: node?.text || null,
-        nextScene: node?.nextScene || null
-      });
-    }
+    });
   }
 
   /* ── Navigation ────────────────────────────── */
@@ -195,7 +288,7 @@ export class SceneController {
   /** Advance via the current node's 'next' field (graph edge) */
   advance() {
     if (this._autoTimer) {
-      clearTimeout(this._autoTimer);
+      this._autoTimer.remove();
       this._autoTimer = null;
     }
 
@@ -235,10 +328,13 @@ export class SceneController {
 
     const chosen = choices[choiceIndex];
 
-    // Apply choice variable action
+    // Apply choice variable actions (set, toggle, add)
     this.vars.applyAction({
       setFlag: chosen.setFlag,
-      setValue: chosen.setValue
+      setValue: chosen.setValue,
+      toggleFlag: chosen.toggleFlag,
+      addFlag: chosen.addFlag,
+      delta: chosen.delta
     });
 
     this._pendingChoices = null;
@@ -268,7 +364,11 @@ export class SceneController {
   }
 
   destroy() {
-    if (this._autoTimer) clearTimeout(this._autoTimer);
+    if (this._autoTimer) {
+      this._autoTimer.remove();
+      this._autoTimer = null;
+    }
+    this._callStack = [];
     this.isRunning = false;
     this.currentScene = null;
     this.currentNode = null;

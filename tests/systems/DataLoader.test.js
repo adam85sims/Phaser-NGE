@@ -16,6 +16,7 @@ describe('Data store (DataLoader)', () => {
     Data.characters = null;
     Data.variables = null;
     Data.scenes = {};
+    Data.theme = null;
   });
 
   /* ── getScene ──────────────────────── */
@@ -103,6 +104,23 @@ describe('Data store (DataLoader)', () => {
 
     it('starts with empty scenes object (not null)', () => {
       expect(Data.scenes).toEqual({});
+    });
+
+    it('starts with null theme', () => {
+      expect(Data.theme).toBeNull();
+    });
+
+    it('stores and retrieves theme data', () => {
+      Data.theme = {
+        dialogue: {
+          fontSize: 24,
+          fontFamily: 'monospace',
+          textColor: '#ffffff'
+        }
+      };
+
+      expect(Data.theme.dialogue.fontSize).toBe(24);
+      expect(Data.theme.dialogue.textColor).toBe('#ffffff');
     });
   });
 });

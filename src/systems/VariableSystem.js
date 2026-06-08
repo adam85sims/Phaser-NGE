@@ -55,14 +55,41 @@ export class VariableSystem {
    *   "has_weapon_permit == true"
    *   "courage >= 30"
    *   "player_name == Lena"
+   *   "courage >= 50 AND has_key == true"
+   *   "courage >= 50 OR is_hero == true"
+   *   "(courage >= 50 AND has_key == true) OR is_hero == true"
    * Returns true if condition is empty/null.
    */
   evaluate(condition) {
     if (!condition || condition.trim() === '') return true;
 
-    const trimmed = condition.trim();
+    let trimmed = condition.trim();
 
-    // Pattern: variable name, operator, value
+    // Strip outer parentheses if they wrap the entire expression
+    while (trimmed.startsWith('(') && this._findMatchingParen(trimmed, 0) === trimmed.length - 1) {
+      trimmed = trimmed.slice(1, -1).trim();
+    }
+
+    // Split on top-level OR (not inside parentheses)
+    const orParts = this._splitTopLevel(trimmed, ' OR ');
+    if (orParts.length > 1) {
+      return orParts.some(part => this.evaluate(part));
+    }
+
+    // Split on top-level AND (not inside parentheses)
+    const andParts = this._splitTopLevel(trimmed, ' AND ');
+    if (andParts.length > 1) {
+      return andParts.every(part => this.evaluate(part));
+    }
+
+    // Single condition
+    return this._evaluateSingle(trimmed);
+  }
+
+  /**
+   * Evaluate a single (non-compound) condition.
+   */
+  _evaluateSingle(trimmed) {
     const match = trimmed.match(
       /^(\w+)\s*(==|!=|>=|<=|>|<|=)\s*(.+)$/
     );
@@ -81,6 +108,43 @@ export class VariableSystem {
       case '<':  return current < val;
       default:   return false;
     }
+  }
+
+  /**
+   * Split a string on a delimiter, but only at the top level
+   * (not inside parentheses).
+   */
+  _splitTopLevel(str, delimiter) {
+    const parts = [];
+    let depth = 0;
+    let start = 0;
+
+    for (let i = 0; i < str.length; i++) {
+      if (str[i] === '(') depth++;
+      else if (str[i] === ')') depth--;
+      else if (depth === 0 && str.slice(i, i + delimiter.length) === delimiter) {
+        parts.push(str.slice(start, i).trim());
+        start = i + delimiter.length;
+        i += delimiter.length - 1;
+      }
+    }
+    parts.push(str.slice(start).trim());
+    return parts;
+  }
+
+  /**
+   * Find the matching closing parenthesis for an opening one.
+   */
+  _findMatchingParen(str, openIndex) {
+    let depth = 0;
+    for (let i = openIndex; i < str.length; i++) {
+      if (str[i] === '(') depth++;
+      else if (str[i] === ')') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
   }
 
   _parseValue(raw) {

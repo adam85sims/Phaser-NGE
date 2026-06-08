@@ -1,0 +1,18 @@
+{
+  "dialogue": {
+    "textBoxSize": { "width": 700, "height": 150 },
+    "textBoxPosition": { "x": 50, "y": 450 },
+    "textSpeed": 40,
+    "fontSize": 24,
+    "fontFamily": "monospace",
+    "textColor": "#ffffff",
+    "backgroundColor": "#22224488",
+    "padding": { "x": 20, "y": 10 },
+    "transitionDuration": 300
+  },
+  "ui": {
+    "toastPosition": { "x": 400, "y": 300 },
+    "toastFontSize": 18,
+    "toastBackgroundColor": "#00000088"
+  }
+}
