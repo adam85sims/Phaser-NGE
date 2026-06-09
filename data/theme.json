@@ -1,18 +1,18 @@
 {
   "dialogue": {
-    "textBoxSize": { "width": 700, "height": 150 },
-    "textBoxPosition": { "x": 50, "y": 450 },
+    "textBoxSize": { "width": 1180, "height": 180 },
+    "textBoxPosition": { "x": 50, "y": 520 },
     "textSpeed": 40,
-    "fontSize": 24,
+    "fontSize": 28,
     "fontFamily": "monospace",
     "textColor": "#ffffff",
     "backgroundColor": "#22224488",
-    "padding": { "x": 20, "y": 10 },
+    "padding": { "x": 30, "y": 20 },
     "transitionDuration": 300
   },
   "ui": {
-    "toastPosition": { "x": 400, "y": 300 },
-    "toastFontSize": 18,
+    "toastPosition": { "x": 640, "y": 360 },
+    "toastFontSize": 24,
     "toastBackgroundColor": "#00000088"
   }
 }

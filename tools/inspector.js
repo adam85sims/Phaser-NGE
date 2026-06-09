@@ -73,6 +73,7 @@ export function renderInspectorContent(container) {
       html += `<div class="form-group"><label>Speaker</label><select data-field="speaker">
         <option value="">(narration)</option>${speakerOpts}</select></div>
         <div class="form-group"><label>Expression</label><input value="${node.expression||''}" data-field="expression"/></div>
+        <div class="form-row"><div class="form-group"><label>Z-Index</label><input type="number" value="${node.zIndex??0}" data-field="zIndex" data-type="number"/></div></div>
         <div class="form-group"><label>Text</label><textarea data-field="text">${(node.text||'').replace(/</g,'&lt;')}</textarea></div>
         <div class="form-row"><div class="form-group"><label>Auto</label><select data-field="autoAdvance">
           <option value="false">No</option><option value="true"${node.autoAdvance?' selected':''}>Yes</option></select></div>

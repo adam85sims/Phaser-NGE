@@ -4,6 +4,7 @@ const TYPE_COLORS = { dialogue: '#3b82f6', choice: '#f59e0b', condition: '#10b98
 const NODE_W = 200, NODE_H = 64, PORT_R = 6;
 
 let canvas, ctx;
+let contextMenu = null;
 let graphState = {
   camera: { x: -300, y: 0 },
   zoom: 1,
@@ -32,7 +33,18 @@ export function mountGraph(container) {
   canvas.addEventListener('mouseup', onPointerUp);
   canvas.addEventListener('wheel', e => { 
     e.preventDefault();
-    graphState.zoom = Math.max(0.3, Math.min(2, graphState.zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    
+    const oldZoom = graphState.zoom;
+    let newZoom = Math.max(0.3, Math.min(2, oldZoom * (e.deltaY > 0 ? 0.92 : 1.08)));
+    
+    const wHalf = canvas.width / 2;
+    const hHalf = canvas.height / 2;
+    graphState.camera.x += (sx - wHalf) / newZoom - (sx - wHalf) / oldZoom;
+    graphState.camera.y += (sy - hHalf) / newZoom - (sy - hHalf) / oldZoom;
+    graphState.zoom = newZoom;
   }, { passive: false });
 
   // Touch
@@ -45,6 +57,201 @@ export function mountGraph(container) {
     requestAnimationFrame(renderLoop);
   };
   requestAnimationFrame(renderLoop);
+
+  // ── Context menu ──
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY);
+  });
+
+  // Close context menu on any click
+  document.addEventListener('click', closeContextMenu, false);
+  document.addEventListener('contextmenu', closeContextMenu, false);
+
+  // Keyboard: Delete/Backspace removes selected node
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Ignore if typing in an input
+      const tag = document.activeElement ? document.activeElement.tagName : '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // Only act when graph canvas is focused/visible
+      if (canvas && canvas.offsetParent !== null) {
+        deleteSelectedNode();
+      }
+    }
+  });
+}
+
+/* ── Node CRUD ───────────────────────────── */
+
+export function createNode(type = 'dialogue', wx = null, wy = null) {
+  const sceneData = editorState.scenes[editorState.activeSceneId];
+  if (!sceneData) return null;
+
+  // Generate unique ID
+  const existingIds = new Set((sceneData.nodes || []).map(n => n.id));
+  let id = type + '_' + 1;
+  let counter = 1;
+  while (existingIds.has(id)) {
+    counter++;
+    id = type + '_' + counter;
+  }
+
+  // Place in center of viewport or at given world coords
+  if (wx === null || wy === null) {
+    wx = -graphState.camera.x;
+    wy = -graphState.camera.y;
+  }
+
+  const node = {
+    id,
+    type,
+    x: Math.round(wx / 20) * 20,
+    y: Math.round(wy / 20) * 20
+  };
+
+  // Type-specific defaults
+  if (type === 'dialogue') {
+    node.speaker = '';
+    node.text = 'New dialogue';
+    node.next = '';
+  } else if (type === 'choice') {
+    node.prompt = '';
+    node.choices = [{ text: 'Choice 1', next: '' }];
+    node.next = '';
+  } else if (type === 'condition') {
+    node.condition = 'flag == true';
+    node.next = '';
+    node.else = '';
+  } else if (type === 'event') {
+    node.eventType = 'sfx';
+    node.eventValue = '';
+    node.next = '';
+  } else if (type === 'call_scene') {
+    node.sceneId = '';
+    node.next = '';
+  } else if (type === 'wait') {
+    node.duration = 1000;
+    node.next = '';
+  } else if (type === 'end') {
+    node.text = '';
+    node.nextScene = '';
+  }
+
+  if (!sceneData.nodes) sceneData.nodes = [];
+  sceneData.nodes.push(node);
+  markDirty();
+
+  // Select the new node
+  editorState.selectedItemId = node.id;
+  editorState.selectedItemType = 'node';
+  window.dispatchEvent(new CustomEvent('editor:render'));
+
+  return node;
+}
+
+export function deleteNode(nodeId) {
+  const sceneData = editorState.scenes[editorState.activeSceneId];
+  if (!sceneData || !sceneData.nodes) return;
+
+  const idx = sceneData.nodes.findIndex(n => n.id === nodeId);
+  if (idx === -1) return;
+
+  sceneData.nodes.splice(idx, 1);
+
+  // Remove all connections pointing to this node
+  sceneData.nodes.forEach(n => {
+    if (n.next === nodeId) n.next = '';
+    if (n.else === nodeId) n.else = '';
+    if (n.choices) {
+      n.choices.forEach(c => { if (c.next === nodeId) c.next = ''; });
+    }
+  });
+
+  // Deselect if selected
+  if (editorState.selectedItemId === nodeId) {
+    editorState.selectedItemId = null;
+    editorState.selectedItemType = null;
+  }
+
+  markDirty();
+  window.dispatchEvent(new CustomEvent('editor:render'));
+}
+
+export function deleteSelectedNode() {
+  if (editorState.selectedItemType === 'node' && editorState.selectedItemId) {
+    deleteNode(editorState.selectedItemId);
+  }
+}
+
+/* ── Context Menu ────────────────────────── */
+
+function showContextMenu(mx, my) {
+  closeContextMenu();
+
+  const rect = canvas.getBoundingClientRect();
+  const canvasX = mx - rect.left;
+  const canvasY = my - rect.top;
+
+  // Check if we right-clicked on a node
+  const hit = hitTest(canvasX, canvasY);
+  const onNode = hit && hit.type === 'node';
+  const onPort = hit && hit.type === 'port';
+
+  const menu = document.createElement('div');
+  menu.id = 'graph-context-menu';
+  menu.style.cssText = `
+    position: fixed; left: ${mx}px; top: ${my}px; z-index: 9999;
+    background: #1a1a2e; border: 1px solid #333; border-radius: 6px;
+    padding: 4px 0; min-width: 180px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    font-size: 12px; font-family: sans-serif;
+  `;
+
+  function addItem(label, onClick, dangerous = false) {
+    const item = document.createElement('div');
+    item.textContent = label;
+    item.style.cssText = `
+      padding: 6px 14px; cursor: pointer; color: ${dangerous ? '#ef4444' : '#ccc'};
+      transition: background 0.1s;
+    `;
+    item.addEventListener('mouseenter', () => { item.style.background = '#2a2a44'; });
+    item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+    item.addEventListener('click', (e) => { e.stopPropagation(); onClick(); closeContextMenu(); });
+    menu.appendChild(item);
+  }
+
+  function addDivider() {
+    const div = document.createElement('div');
+    div.style.cssText = 'height:1px; background:#333; margin:4px 0;';
+    menu.appendChild(div);
+  }
+
+  // Get world coords for placement
+  const wpos = screenToWorld(canvasX, canvasY);
+
+  addItem('Add Dialogue Node', () => createNode('dialogue', wpos.x, wpos.y));
+  addItem('Add Choice Node', () => createNode('choice', wpos.x, wpos.y));
+  addItem('Add Condition Node', () => createNode('condition', wpos.x, wpos.y));
+  addItem('Add Event Node', () => createNode('event', wpos.x, wpos.y));
+  addItem('Add Wait Node', () => createNode('wait', wpos.x, wpos.y));
+  addItem('Add End Node', () => createNode('end', wpos.x, wpos.y));
+
+  if (onNode) {
+    addDivider();
+    addItem('Delete Node "' + hit.nodeId + '"', () => deleteNode(hit.nodeId), true);
+  }
+
+  contextMenu = menu;
+  document.body.appendChild(menu);
+}
+
+function closeContextMenu() {
+  if (contextMenu) {
+    contextMenu.remove();
+    contextMenu = null;
+  }
 }
 
 function getNodes() {

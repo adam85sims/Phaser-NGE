@@ -181,7 +181,12 @@ function renderWorkspace() {
   if (editorState.activeWorkspaceTab === 'dialogue') {
     body.innerHTML = `
       <div id="graph-container" style="position:relative; width:100%; height:100%; overflow:hidden;">
-        <button id="btn-graph-fullscreen" class="btn" style="position:absolute; top:12px; right:12px; z-index:10; background:var(--bg-elevated); border:1px solid var(--border);">
+        <!-- Graph toolbar -->
+        <div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:6px">
+          <button id="btn-graph-add-node" class="btn" style="background:var(--bg-elevated);border:1px solid var(--border);padding:4px 10px;font-size:11px;cursor:pointer;border-radius:4px">+ Node</button>
+          <button id="btn-graph-del-node" class="btn" style="background:var(--bg-elevated);border:1px solid var(--border);padding:4px 10px;font-size:11px;cursor:pointer;border-radius:4px;color:#ef4444">Delete</button>
+        </div>
+        <button id="btn-graph-fullscreen" class="btn" style="position:absolute; top:8px; right:8px; z-index:10; background:var(--bg-elevated); border:1px solid var(--border);">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;">
             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
           </svg>
@@ -193,6 +198,12 @@ function renderWorkspace() {
     // Lazy load and mount graph module
     import('./graph.js').then(module => {
       module.mountGraph(document.getElementById('graph-container'));
+
+      // Wire graph toolbar buttons
+      const addBtn = document.getElementById('btn-graph-add-node');
+      const delBtn = document.getElementById('btn-graph-del-node');
+      if (addBtn) addBtn.addEventListener('click', () => module.createNode('dialogue'));
+      if (delBtn) delBtn.addEventListener('click', () => module.deleteSelectedNode());
     });
 
     const fullscreenBtn = document.getElementById('btn-graph-fullscreen');
@@ -273,41 +284,66 @@ function renderScenePreview() {
   const bgY = bgLayer?.y ?? 0;
   const bgScale = bgLayer?.scale ?? 1;
 
-  // Fixed 16:9 canvas size (standard game resolution)
-  const CANVAS_WIDTH = 1280;
-  const CANVAS_HEIGHT = 720;
+  const VW = editorState.viewportWidth || 1280;
+  const VH = editorState.viewportHeight || 720;
   const RULER_SIZE = 24;
 
-  // Build background styles with transform
+  // Game camera frame (1280x720 inside viewport)
+  const GA = 1280;  // game area width
+  const GB = 720;  // game area height
+  const camLeft = Math.round((VW - GA) / 2);
+  const camTop = Math.round((VH - GB) / 2);
+
+  // Build background style
   const bgStyle = bgKey 
     ? `background: #111; background-image: url(/assets/backgrounds/${bgKey}.png), url(/assets/backgrounds/${bgKey}.jpg); background-size: cover; background-position: center; transform: translate(${bgX}px, ${bgY}px) scale(${bgScale}); transform-origin: top left;`
     : 'background: #1a1a2e;';
 
-  // Generate ruler ticks
-  const hRulerTicks = [];
-  const vRulerTicks = [];
+  // ── Ruler ticks with pan/zoom ──
+  const { previewPanX, previewPanY, previewZoom } = editorState;
   const majorStep = 100;
   const minorStep = 20;
-  
-  for (let x = 0; x <= CANVAS_WIDTH; x += minorStep) {
-    const isMajor = x % majorStep === 0;
-    const height = isMajor ? 12 : 6;
-    hRulerTicks.push(`<div style="position:absolute;left:${x}px;bottom:0;width:1px;height:${height}px;background:var(--border)"></div>`);
-    if (isMajor) {
-      hRulerTicks.push(`<div style="position:absolute;left:${x+2}px;bottom:2px;font-size:9px;color:var(--text-muted)">${x}</div>`);
+
+  function generateHRuler() {
+    const ticks = [];
+    const visibleW = VW * previewZoom;
+    const startX = -previewPanX;
+    const endX = -previewPanX + visibleW;
+    // Extend range so ticks fill the ruler area
+    const from = Math.floor(startX / minorStep) * minorStep;
+    const to = Math.ceil(endX / minorStep) * minorStep;
+    for (let wx = from; wx <= to; wx += minorStep) {
+      const screenX = (wx + previewPanX) * previewZoom;
+      const isMajor = wx % majorStep === 0;
+      const height = isMajor ? 12 : 6;
+      ticks.push(`<div style="position:absolute;left:${screenX}px;bottom:0;width:1px;height:${height}px;background:var(--border)"></div>`);
+      if (isMajor) {
+        ticks.push(`<div style="position:absolute;left:${screenX + 2}px;bottom:2px;font-size:9px;color:var(--text-muted);pointer-events:none">${wx}</div>`);
+      }
     }
-  }
-  
-  for (let y = 0; y <= CANVAS_HEIGHT; y += minorStep) {
-    const isMajor = y % majorStep === 0;
-    const width = isMajor ? 12 : 6;
-    vRulerTicks.push(`<div style="position:absolute;top:${y}px;right:0;height:1px;width:${width}px;background:var(--border)"></div>`);
-    if (isMajor) {
-      vRulerTicks.push(`<div style="position:absolute;top:${y+2}px;right:2px;font-size:9px;color:var(--text-muted)">${y}</div>`);
-    }
+    return ticks.join('');
   }
 
-  // Check if a dialogue node is selected for text overlay
+  function generateVRuler() {
+    const ticks = [];
+    const visibleH = VH * previewZoom;
+    const startY = -previewPanY;
+    const endY = -previewPanY + visibleH;
+    const from = Math.floor(startY / minorStep) * minorStep;
+    const to = Math.ceil(endY / minorStep) * minorStep;
+    for (let wy = from; wy <= to; wy += minorStep) {
+      const screenY = (wy + previewPanY) * previewZoom;
+      const isMajor = wy % majorStep === 0;
+      const width = isMajor ? 12 : 6;
+      ticks.push(`<div style="position:absolute;top:${screenY}px;right:0;height:1px;width:${width}px;background:var(--border)"></div>`);
+      if (isMajor) {
+        ticks.push(`<div style="position:absolute;top:${screenY + 2}px;right:2px;font-size:9px;color:var(--text-muted);pointer-events:none">${wy}</div>`);
+      }
+    }
+    return ticks.join('');
+  }
+
+  // ── Dialogue overlay for selected node ──
   let dialogueHTML = '';
   if (editorState.selectedItemType === 'node' && editorState.selectedItemId) {
     const node = sceneData?.nodes?.find(n => n.id === editorState.selectedItemId);
@@ -318,7 +354,7 @@ function renderScenePreview() {
       const portrait = char && node.expression ? `/assets/portraits/${charId}_${node.expression}.png` : '';
 
       dialogueHTML = `
-        <div style="position:absolute;bottom:20px;left:20px;right:20px;background:rgba(0,0,0,0.85);border-radius:8px;padding:16px;border:1px solid var(--border);backdrop-filter:blur(4px)">
+        <div style="position:absolute;bottom:20px;left:20px;right:20px;background:rgba(0,0,0,0.85);border-radius:8px;padding:16px;border:1px solid var(--border);backdrop-filter:blur(4px);z-index:50">
           <div style="display:flex;align-items:flex-end;gap:12px">
             ${portrait ? `<img src="${portrait}" style="height:100px;border-radius:4px" />` : ''}
             <div style="flex:1">
@@ -331,53 +367,72 @@ function renderScenePreview() {
     }
   }
 
+  // ── Build HTML ──
   canvasArea.innerHTML = `
-    <div style="display:flex;position:relative;width:100%;height:100%;overflow:auto;background:var(--bg-base)" id="scene-canvas-inner">
-      <!-- Left ruler (Y-axis) -->
-      <div style="width:${RULER_SIZE}px;height:${CANVAS_HEIGHT}px;flex-shrink:0;background:var(--bg-panel);border-right:1px solid var(--border);position:relative;overflow:hidden">
-        ${vRulerTicks.join('')}
-      </div>
-      
-      <!-- Top ruler (X-axis) -->
-      <div style="height:${RULER_SIZE}px;flex:1;min-width:0;background:var(--bg-panel);border-bottom:1px solid var(--border);position:relative;overflow:hidden">
-        ${hRulerTicks.join('')}
-      </div>
-      
-      <!-- Spacer for ruler intersection -->
-      <div style="width:${RULER_SIZE}px;height:${RULER_SIZE}px;flex-shrink:0;background:var(--bg-panel);border-bottom:1px solid var(--border);border-right:1px solid var(--border)"></div>
+    <!-- Ruler corner -->
+    <div style="position:absolute;left:0;top:0;width:${RULER_SIZE}px;height:${RULER_SIZE}px;background:var(--bg-panel);border-right:1px solid var(--border);border-bottom:1px solid var(--border);z-index:20;display:flex;align-items:center;justify-content:center">
+      <span style="font-size:8px;color:var(--text-dim)" id="zoom-display">${Math.round(previewZoom * 100)}%</span>
     </div>
-    
-    <!-- Canvas viewport (scrollable area) -->
-    <div style="position:absolute;top:${RULER_SIZE}px;left:${RULER_SIZE}px;right:0;bottom:0;overflow:auto" id="canvas-viewport">
-      <div style="width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;position:relative;background:#111" id="scene-viewport">
-        <!-- Background layer -->
-        <div style="position:absolute;left:0;top:0;width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;opacity:${bgOpacity};${bgStyle}"></div>
-        
-        ${bgKey ? '' : '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px;pointer-events:none">🎬 <span style="margin-top:8px">Drop a background here</span></div>'}
-        
-        ${dialogueHTML}
-        
-        <!-- Scene info overlay -->
-        <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;pointer-events:none">
-          ${bgKey ? `<span>🎨 ${bgKey}</span>` : ''}
-          <span>📄 ${sceneData?.nodes?.length || 0} nodes</span>
+
+    <!-- X-axis ruler -->
+    <div style="position:absolute;left:${RULER_SIZE}px;top:0;right:0;height:${RULER_SIZE}px;background:var(--bg-panel);border-bottom:1px solid var(--border);overflow:hidden;z-index:20">
+      <div style="position:relative;width:100%;height:100%">${generateHRuler()}</div>
+    </div>
+
+    <!-- Y-axis ruler -->
+    <div style="position:absolute;left:0;top:${RULER_SIZE}px;width:${RULER_SIZE}px;bottom:0;background:var(--bg-panel);border-right:1px solid var(--border);overflow:hidden;z-index:20">
+      <div style="position:relative;width:100%;height:100%">${generateVRuler()}</div>
+    </div>
+
+    <!-- Viewport container (handles middle-button pan + wheel zoom) -->
+    <div id="canvas-viewport" style="position:absolute;left:${RULER_SIZE}px;top:${RULER_SIZE}px;right:0;bottom:0;overflow:hidden;cursor:grab;background:var(--bg-base)">
+      <div id="canvas-transform" style="transform-origin:0 0;transform:translate(${previewPanX * previewZoom}px, ${previewPanY * previewZoom}px) scale(${previewZoom})">
+        <!-- Scene viewport canvas -->
+        <div id="scene-viewport" style="width:${VW}px;height:${VH}px;position:relative;background:#111;overflow:hidden">
+          <!-- Background layer -->
+          <div style="position:absolute;left:0;top:0;width:${VW}px;height:${VH}px;opacity:${bgOpacity};${bgStyle}"></div>
+
+          ${bgKey ? '' : '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px;pointer-events:none">🎬 <span style="margin-top:8px">Drop a background here</span></div>'}
+
+          ${dialogueHTML}
+
+          <!-- Camera border — shows the in-game viewport (800x600) -->
+          <div style="position:absolute;left:${camLeft}px;top:${camTop}px;width:${GA}px;height:${GB}px;border:2px solid rgba(0,204,255,0.5);pointer-events:none;z-index:40;box-shadow:inset 0 0 30px rgba(0,204,255,0.08)">
+            <!-- Corner brackets -->
+            <div style="position:absolute;left:-2px;top:-2px;width:16px;height:2px;background:#00ccff"></div>
+            <div style="position:absolute;left:-2px;top:-2px;width:2px;height:16px;background:#00ccff"></div>
+            <div style="position:absolute;right:-2px;top:-2px;width:16px;height:2px;background:#00ccff"></div>
+            <div style="position:absolute;right:-2px;top:-2px;width:2px;height:16px;background:#00ccff"></div>
+            <div style="position:absolute;left:-2px;bottom:-2px;width:16px;height:2px;background:#00ccff"></div>
+            <div style="position:absolute;left:-2px;bottom:-2px;width:2px;height:16px;background:#00ccff"></div>
+            <div style="position:absolute;right:-2px;bottom:-2px;width:16px;height:2px;background:#00ccff"></div>
+            <div style="position:absolute;right:-2px;bottom:-2px;width:2px;height:16px;background:#00ccff"></div>
+          </div>
+          <div style="position:absolute;left:${camLeft}px;top:${camTop - 18}px;font-size:9px;color:rgba(0,204,255,0.6);background:rgba(0,0,0,0.5);padding:2px 6px;border-radius:3px;pointer-events:none;z-index:40;white-space:nowrap">🎥 ${GA}×${GB} (game view)</div>
+
+          <!-- Scene info overlay -->
+          <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;pointer-events:none;z-index:30">
+            ${bgKey ? `<span>🎨 ${bgKey}</span>` : ''}
+            <span>📄 ${sceneData?.nodes?.length || 0} nodes</span>
+          </div>
+
+          <!-- Drop zone overlay -->
+          <div id="scene-drop-overlay" style="position:absolute;inset:0;border:2px dashed transparent;transition:border-color 0.15s,background-color 0.15s;pointer-events:auto;display:flex;align-items:center;justify-content:center;z-index:100">
+            <div id="scene-drop-hint" style="background:var(--accent);color:#000;padding:8px 16px;border-radius:6px;font-weight:bold;font-size:13px;opacity:0;transform:scale(0.9);transition:all 0.15s;pointer-events:none">+ DROP HERE</div>
+          </div>
+
+          <!-- Cursor position display -->
+          <div style="position:absolute;bottom:8px;left:8px;font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;pointer-events:none;z-index:30" id="cursor-pos-display">X: 0, Y: 0</div>
         </div>
-        
-        <!-- Drop zone overlay -->
-        <div id="scene-drop-overlay" style="position:absolute;inset:0;border:2px dashed transparent;transition:border-color 0.15s,background-color 0.15s;pointer-events:auto;display:flex;align-items:center;justify-content:center;z-index:100">
-          <div id="scene-drop-hint" style="background:var(--accent);color:#000;padding:8px 16px;border-radius:6px;font-weight:bold;font-size:13px;opacity:0;transform:scale(0.9);transition:all 0.15s;pointer-events:none">+ DROP HERE</div>
-        </div>
-        
-        <!-- Cursor position display -->
-        <div style="position:absolute;bottom:8px;left:8px;font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;pointer-events:none" id="cursor-pos-display">X: 0, Y: 0</div>
       </div>
     </div>
   `;
-  
-  // Bind drop zone events (on persistent overlay element)
+
+  // ── Event bindings ──
+
+  // Drop zone
   const dropOverlay = document.getElementById('scene-drop-overlay');
   const dropHint = document.getElementById('scene-drop-hint');
-  
   if (dropOverlay && dropHint) {
     dropOverlay.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -387,7 +442,6 @@ function renderScenePreview() {
       dropHint.style.opacity = '1';
       dropHint.style.transform = 'scale(1)';
     });
-    
     dropOverlay.addEventListener('dragleave', (e) => {
       if (!dropOverlay.contains(e.relatedTarget)) {
         dropOverlay.style.borderColor = 'transparent';
@@ -396,19 +450,14 @@ function renderScenePreview() {
         dropHint.style.transform = 'scale(0.9)';
       }
     });
-    
     dropOverlay.addEventListener('drop', (e) => {
       e.preventDefault();
       dropOverlay.style.borderColor = 'transparent';
       dropOverlay.style.backgroundColor = 'transparent';
       dropHint.style.opacity = '0';
       dropHint.style.transform = 'scale(0.9)';
-      
       let dragDataStr = e.dataTransfer.getData('application/json');
-      if (!dragDataStr) {
-        dragDataStr = e.dataTransfer.getData('text/plain');
-      }
-      
+      if (!dragDataStr) dragDataStr = e.dataTransfer.getData('text/plain');
       try {
         const dragData = JSON.parse(dragDataStr || '{}');
         if (dragData.category === 'backgrounds' && dragData.name) {
@@ -422,23 +471,142 @@ function renderScenePreview() {
             }
           });
         }
-      } catch (err) {
-        console.warn('[drop] failed:', err);
+      } catch (err) { console.warn('[drop] failed:', err); }
+    });
+  }
+
+  // ── Middle-button pan + wheel zoom ──
+  const viewport = document.getElementById('canvas-viewport');
+  const transform = document.getElementById('canvas-transform');
+  if (!viewport || !transform) return;
+
+  // Middle-button pan
+  viewport.addEventListener('mousedown', (e) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      editorState.previewDragging = true;
+      editorState.previewDragStartX = e.clientX - editorState.previewPanX * editorState.previewZoom;
+      editorState.previewDragStartY = e.clientY - editorState.previewPanY * editorState.previewZoom;
+      viewport.style.cursor = 'grabbing';
+    }
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (editorState.previewDragging) {
+      e.preventDefault();
+      const z = editorState.previewZoom;
+      editorState.previewPanX = (e.clientX - editorState.previewDragStartX) / z;
+      editorState.previewPanY = (e.clientY - editorState.previewDragStartY) / z;
+      updateScenePreviewTransform();
+    } else {
+      // Mouse position tracker
+      const sViewport = document.getElementById('scene-viewport');
+      const posDisplay = document.getElementById('cursor-pos-display');
+      if (sViewport && posDisplay) {
+        const rect = sViewport.getBoundingClientRect();
+        const z = editorState.previewZoom;
+        const origX = (e.clientX - rect.left) / z;
+        const origY = (e.clientY - rect.top) / z;
+        posDisplay.textContent = `X: ${Math.round(origX)}, Y: ${Math.round(origY)}`;
       }
-    });
+    }
+  });
+
+  document.addEventListener('mouseup', (e) => {
+    if (e.button === 1 && editorState.previewDragging) {
+      editorState.previewDragging = false;
+      viewport.style.cursor = 'grab';
+    }
+  });
+
+  // Prevent default middle-click scroll/autoscroll
+  viewport.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+
+  // Wheel zoom
+  viewport.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const oldZoom = editorState.previewZoom;
+    let newZoom = oldZoom * (e.deltaY > 0 ? 0.92 : 1.08);
+    newZoom = Math.max(0.1, Math.min(5, newZoom));
+
+    // Zoom towards mouse position
+    editorState.previewPanX = editorState.previewPanX + (mx / newZoom) - (mx / oldZoom);
+    editorState.previewPanY = editorState.previewPanY + (my / newZoom) - (my / oldZoom);
+    editorState.previewZoom = newZoom;
+
+    updateScenePreviewTransform();
+  }, { passive: false });
+
+  // Prevent context menu on the viewport (let right-click through to graph)
+  viewport.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+function updateScenePreviewTransform() {
+  const transform = document.getElementById('canvas-transform');
+  const zoomDisplay = document.getElementById('zoom-display');
+  const { previewPanX, previewPanY, previewZoom } = editorState;
+  if (transform) {
+    transform.style.transform = `translate(${previewPanX * previewZoom}px, ${previewPanY * previewZoom}px) scale(${previewZoom})`;
   }
-  
-  // Mouse position tracker for rulers
-  const sceneViewport = document.getElementById('scene-viewport');
-  const posDisplay = document.getElementById('cursor-pos-display');
-  if (sceneViewport && posDisplay) {
-    sceneViewport.addEventListener('mousemove', (e) => {
-      const rect = sceneViewport.getBoundingClientRect();
-      const x = Math.round(e.clientX - rect.left);
-      const y = Math.round(e.clientY - rect.top);
-      posDisplay.textContent = `X: ${x}, Y: ${y}`;
-    });
+  if (zoomDisplay) {
+    zoomDisplay.textContent = `${Math.round(previewZoom * 100)}%`;
   }
+
+  // Re-render rulers by re-running the scene preview portion
+  // Instead of full re-render, just rebuild ruler ticks
+  _rebuildRulers();
+}
+
+function _rebuildRulers() {
+  const { previewPanX, previewPanY, previewZoom, viewportWidth: VW, viewportHeight: VH } = editorState;
+  const majorStep = 100, minorStep = 20;
+
+  function hTicks() {
+    const ticks = [];
+    const visibleW = VW * previewZoom;
+    const from = Math.floor((-previewPanX) / minorStep) * minorStep;
+    const to = Math.ceil((-previewPanX + visibleW) / minorStep) * minorStep;
+    for (let wx = from; wx <= to; wx += minorStep) {
+      const screenX = (wx + previewPanX) * previewZoom;
+      const isMajor = wx % majorStep === 0;
+      const height = isMajor ? 12 : 6;
+      ticks.push(`<div style="position:absolute;left:${screenX}px;bottom:0;width:1px;height:${height}px;background:var(--border)"></div>`);
+      if (isMajor) {
+        ticks.push(`<div style="position:absolute;left:${screenX + 2}px;bottom:2px;font-size:9px;color:var(--text-muted);pointer-events:none">${wx}</div>`);
+      }
+    }
+    return ticks.join('');
+  }
+
+  function vTicks() {
+    const ticks = [];
+    const visibleH = VH * previewZoom;
+    const from = Math.floor((-previewPanY) / minorStep) * minorStep;
+    const to = Math.ceil((-previewPanY + visibleH) / minorStep) * minorStep;
+    for (let wy = from; wy <= to; wy += minorStep) {
+      const screenY = (wy + previewPanY) * previewZoom;
+      const isMajor = wy % majorStep === 0;
+      const width = isMajor ? 12 : 6;
+      ticks.push(`<div style="position:absolute;top:${screenY}px;right:0;height:1px;width:${width}px;background:var(--border)"></div>`);
+      if (isMajor) {
+        ticks.push(`<div style="position:absolute;top:${screenY + 2}px;right:2px;font-size:9px;color:var(--text-muted);pointer-events:none">${wy}</div>`);
+      }
+    }
+    return ticks.join('');
+  }
+
+  // Find ruler containers
+  const rulers = document.querySelectorAll('#canvas-area > div');
+  // X-ruler is the second child (after corner), Y-ruler is the third
+  // Let's find by position: the X ruler is at position relative to canvas-area
+  const xRuler = document.querySelector('#canvas-area > div:nth-child(2) > div');
+  const yRuler = document.querySelector('#canvas-area > div:nth-child(3) > div');
+  if (xRuler) xRuler.innerHTML = hTicks();
+  if (yRuler) yRuler.innerHTML = vTicks();
 }
 
 // ── Workspace tab switching ────────────────────────────

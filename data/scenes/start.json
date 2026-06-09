@@ -9,22 +9,16 @@
       "type": "dialogue",
       "speaker": "narrator",
       "text": "This text should persist after clicking away!",
-      "x": -200,
+      "x": -340,
       "y": -80,
       "next": "node_2"
     },
     {
       "id": "node_2",
       "type": "dialogue",
-      "text": "New node",
-      "x": 60,
-      "y": -60
-    },
-    {
-      "id": "node_3",
-      "type": "event",
-      "x": -440,
-      "y": -80
+      "text": "New node. This is a test.",
+      "x": -20,
+      "y": -40
     }
   ],
   "layers": [
@@ -32,7 +26,7 @@
       "id": "bg_1781025962171",
       "type": "background",
       "asset": "BG_forest_00001_",
-      "x": 100,
+      "x": 0,
       "y": 0,
       "scale": 1,
       "zIndex": -66,

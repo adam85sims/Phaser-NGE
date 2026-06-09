@@ -13,6 +13,16 @@ export const editorState = {
   activeSceneId: null,
   activeWorkspaceTab: 'dialogue',
   dirty: false,
+
+  // Scene Preview
+  viewportWidth: 1280,
+  viewportHeight: 720,
+  previewPanX: 0,
+  previewPanY: 0,
+  previewZoom: 1,
+  previewDragging: false,
+  previewDragStartX: 0,
+  previewDragStartY: 0,
   
   // Stats
   stats: {

@@ -11,7 +11,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
-    const W = 800, H = 600;
+    const W = 1280, H = 720;
     const title = Data.game?.title || 'Untitled';
 
     // Background gradient
@@ -32,17 +32,17 @@ export class MenuScene extends Phaser.Scene {
     bg.fillRect(0, 0, W, H);
 
     // Title
-    this.add.text(W / 2, 180, title, {
-      fontSize: '42px', fontFamily: 'monospace', color: '#ffffff',
+    this.add.text(W / 2, 220, title, {
+      fontSize: '56px', fontFamily: 'monospace', color: '#ffffff',
     }).setOrigin(0.5);
 
     // Subtitle
-    this.add.text(W / 2, 230, '— Phaser NGE —', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#666688',
+    this.add.text(W / 2, 280, '— Phaser NGE —', {
+      fontSize: '18px', fontFamily: 'monospace', color: '#666688',
     }).setOrigin(0.5);
 
     // Start Game button
-    const startBtn = this.add.text(W / 2, 340, '▶  Start Game', {
+    const startBtn = this.add.text(W / 2, 420, '▶  Start Game', {
       fontSize: '22px', fontFamily: 'monospace', color: '#00ccff',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     startBtn.on('pointerover', () => startBtn.setColor('#ffffff'));
@@ -52,7 +52,7 @@ export class MenuScene extends Phaser.Scene {
     // Continue button
     const slots = JSON.parse(localStorage.getItem('narrative_saves') || '[]');
     const hasSave = slots.some(s => s !== null && s !== undefined);
-    const continueBtn = this.add.text(W / 2, 390, '▶  Continue', {
+    const continueBtn = this.add.text(W / 2, 480, '▶  Continue', {
       fontSize: '18px', fontFamily: 'monospace',
       color: hasSave ? '#88aa88' : '#444444',
     }).setOrigin(0.5);
@@ -64,7 +64,7 @@ export class MenuScene extends Phaser.Scene {
     }
 
     // Settings button
-    const settingsBtn = this.add.text(W / 2, 440, '⚙  Settings', {
+    const settingsBtn = this.add.text(W / 2, 540, '⚙  Settings', {
       fontSize: '18px', fontFamily: 'monospace', color: '#aaaaaa',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     settingsBtn.on('pointerover', () => settingsBtn.setColor('#ffffff'));
@@ -89,11 +89,11 @@ export class MenuScene extends Phaser.Scene {
     bg.fillRect(0, 0, W, H);
 
     // Title
-    this.add.text(W / 2, 80, 'Settings', {
-      fontSize: '28px', fontFamily: 'monospace', color: '#ffffff',
+    this.add.text(W / 2, 120, 'Settings', {
+      fontSize: '36px', fontFamily: 'monospace', color: '#ffffff',
     }).setOrigin(0.5);
 
-    const rowY = [170, 240, 310, 380];
+    const rowY = [240, 310, 380, 450];
     const labels = ['Text Speed', 'BGM Volume', 'SFX Volume', 'Fullscreen'];
     const getters = [
       () => `${Settings.textSpeed}ms`,
@@ -149,7 +149,7 @@ export class MenuScene extends Phaser.Scene {
     });
 
     // Back button
-    const backBtn = this.add.text(W / 2, 480, '← Back', {
+    const backBtn = this.add.text(W / 2, 580, '← Back', {
       fontSize: '20px', fontFamily: 'monospace', color: '#aaaaaa',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));

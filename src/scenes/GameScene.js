@@ -17,8 +17,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    this.W = 800;
-    this.H = 600;
+    this.W = 1280;
+    this.H = 720;
 
     // ── Check for scene data passed from MenuScene (Continue) ──
     const initData = this.scene.settings.data || {};
@@ -60,7 +60,7 @@ export class GameScene extends Phaser.Scene {
 
     ctrl.onDialogue = (data) => {
       if (data.speaker) {
-        this.characters.show(data.speaker, data.expression || 'neutral', data.position || 'center');
+        this.characters.show(data.speaker, data.expression || 'neutral', data.position || 'center', data.zIndex || 0);
       }
 
       this.dialogue.showDialogue(
@@ -319,7 +319,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Show a brief toast notification */
   _showToast(text) {
-    const toast = this.add.text(400, 300, text, {
+    const toast = this.add.text(this.W / 2, this.H / 2, text, {
       fontSize: '18px', fontFamily: 'monospace', color: '#ffffff',
       backgroundColor: '#00000088', padding: { x: 16, y: 8 },
     }).setOrigin(0.5).setDepth(500);
@@ -327,7 +327,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: toast,
       alpha: 0,
-      y: 280,
+      y: (this.H / 2) - 20,
       duration: 1200,
       delay: 600,
       onComplete: () => toast.destroy(),

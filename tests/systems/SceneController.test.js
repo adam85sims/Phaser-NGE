@@ -360,6 +360,7 @@ describe('SceneController', () => {
         text: 'Hello world',
         expression: 'happy',
         position: 'center',
+        zIndex: 0,
         autoAdvance: false,
         waitTime: 0,
       });

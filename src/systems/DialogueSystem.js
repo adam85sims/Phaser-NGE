@@ -342,14 +342,17 @@ export class DialogueSystem {
     const { x, y, w, h } = this.box;
     const container = this.scene.add.container(0, 0).setDepth(300);
 
+    const W = this.scene.scale.width;
+    const H = this.scene.scale.height;
+
     // Semi-transparent overlay
     const overlay = this.scene.add.graphics();
     overlay.fillStyle(0x000000, 0.85);
-    overlay.fillRect(0, 0, 800, 600);
+    overlay.fillRect(0, 0, W, H);
     container.add(overlay);
 
     // Title
-    const title = this.scene.add.text(400, 20, 'Dialogue History', {
+    const title = this.scene.add.text(W / 2, 20, 'Dialogue History', {
       fontSize: '20px', fontFamily: 'monospace', color: '#ffffff',
     }).setOrigin(0.5, 0);
     container.add(title);
@@ -370,19 +373,19 @@ export class DialogueSystem {
 
       const line = this.scene.add.text(40, startY + i * lineHeight, displayText, {
         fontSize: '12px', fontFamily: 'monospace', color: color,
-        wordWrap: { width: 720 },
+        wordWrap: { width: W - 80 },
       });
       container.add(line);
     }
 
     // Close hint
-    const hint = this.scene.add.text(400, 580, 'Press H or click to close', {
+    const hint = this.scene.add.text(W / 2, H - 20, 'Press H or click to close', {
       fontSize: '14px', fontFamily: 'monospace', color: '#666688',
     }).setOrigin(0.5);
     container.add(hint);
 
     // Click anywhere to close
-    overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, 800, 600), Phaser.Geom.Rectangle.Contains);
+    overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, W, H), Phaser.Geom.Rectangle.Contains);
     overlay.on('pointerdown', () => {
       container.destroy();
       this._historyContainer = null;

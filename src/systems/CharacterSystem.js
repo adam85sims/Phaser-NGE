@@ -17,8 +17,9 @@ export class CharacterSystem {
   /**
    * Show a character portrait on screen.
    * Positions: 'left' (x=160), 'center' (x=400), 'right' (x=640)
+   * zIndex controls draw order within the portrait layer (higher = on top)
    */
-  show(characterId, expression, position) {
+  show(characterId, expression, position, zIndex = 0) {
     const charData = Data.getCharacter(characterId);
     if (!charData) return;
 
@@ -35,8 +36,10 @@ export class CharacterSystem {
     }
 
     const x = this._getPositionX(position || 'center');
-    const img = this.scene.add.image(x, 280, texKey).setScale(2);
+    const img = this.scene.add.image(x, this.scene.scale.height * 0.5, texKey).setScale(2);
+    img.zIndex = zIndex;
     this.container.add(img);
+    this.container.sort('zIndex');
     this.portraits[characterId] = img;
 
     // Fade in
@@ -96,8 +99,9 @@ export class CharacterSystem {
   }
 
   _getPositionX(position) {
-    const map = { left: 160, 'center-left': 280, center: 400, 'center-right': 520, right: 640 };
-    return map[position] || 400;
+    const W = this.scene.scale.width;
+    const map = { left: W * 0.2, 'center-left': W * 0.35, center: W * 0.5, 'center-right': W * 0.65, right: W * 0.8 };
+    return map[position] || (W * 0.5);
   }
 
   /** Clean up all portraits */

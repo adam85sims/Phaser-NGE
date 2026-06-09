@@ -192,6 +192,7 @@ export class SceneController {
         text: node.text,
         expression: node.expression || null,
         position: node.position || 'center',
+        zIndex: node.zIndex || 0,
         autoAdvance: node.autoAdvance || false,
         waitTime: node.waitTime || 0
       });
