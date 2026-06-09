@@ -293,6 +293,7 @@ body {
   overflow: hidden;
   transition: height 0.2s;
   flex-shrink: 0;
+  position: relative;
 }
 #preview.open { height: 340px; }
 #preview .header {

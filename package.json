@@ -13,6 +13,7 @@
     "import-asset": "tools/import-asset.sh"
   },
   "dependencies": {
+    "@monaco-editor/loader": "^1.7.0",
     "phaser": "^4.1.0"
   },
   "devDependencies": {

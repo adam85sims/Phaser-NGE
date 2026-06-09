@@ -35,10 +35,33 @@ let _draftRestored = false;
 
 // ─── INIT ───────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', () => {
+// The editor can init on DOMContentLoaded (standalone) or
+// immediately when __editorBridge is set (embedded in tools app).
+function _initEditor() {
   bindUI();
   initCanvas();
 
+  // Mode 1: Embedded inline in tools app (__editorBridge set by parent view)
+  const bridge = window.__editorBridge;
+  if (bridge && bridge.app) {
+    state.gameConfig = bridge.app.data.game || { scenes: [], title: 'New Project', defaults: {} };
+    state.characters = bridge.app.data.characters || {};
+    state.variableDefs = bridge.app.data.variables || {};
+    populateSceneList();
+    const scenes = state.gameConfig.scenes || [];
+    if (scenes.length > 0) {
+      const first = scenes[0];
+      const sceneData = bridge.app.data.scenes?.[first]?.data;
+      if (sceneData) {
+        applySceneData(first, sceneData);
+      } else {
+        loadScene(first);
+      }
+    }
+    return;
+  }
+
+  // Standalone mode: draft restore, postMessage, disk loading
   const draft = localStorage.getItem('dialogue_editor_draft');
   if (draft) {
     try {
@@ -57,24 +80,16 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus('Restored draft', 'dirty');
         const sel = document.getElementById('scene-select');
         if (sel) sel.value = d.sceneId;
-        // Don't return — the setTimeout will still fire, but _draftRestored
-        // tells it to skip loadGameData so the restore isn't overwritten
       } else {
-        // User dismissed the restore dialog — clear draft and suppress future saves
         localStorage.removeItem('dialogue_editor_draft');
         _draftSuppressed = true;
       }
-    } catch(e) { /* ignore corrupt draft */
+    } catch(e) {
       localStorage.removeItem('dialogue_editor_draft');
     }
   }
 
-  // Listen for project state from the integrated editor (postMessage)
-  // If embedded in an iframe inside the integrated editor, the parent sends
-  // the current project state so we don't read stale data from disk.
-  // Timeout: fall back to disk fetch if no parent message arrives.
   let parentMsgReceived = false;
-
   window.addEventListener('message', function onMsg(e) {
     if (e.data?.type === 'project-state') {
       parentMsgReceived = true;
@@ -85,17 +100,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setTimeout(() => {
     if (!parentMsgReceived) {
-      // If a draft was restored, we already have scene data — skip reloading
       if (_draftRestored) {
         populateSceneList();
         _draftRestored = false;
-        _draftSuppressed = false; // re-enable auto-save now that scene is set
+        _draftSuppressed = false;
         return;
       }
-      loadGameData(); // fallback: load from disk (standalone mode)
+      loadGameData();
     }
   }, 300);
-});
+}
+
+// Standalone mode: init on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', _initEditor);
+// Embedded mode: if __editorBridge already set (loaded after page), init immediately
+if (window.__editorBridge) {
+  setTimeout(_initEditor, 0);
+}
 
 function bindUI() {
   const byId = id => document.getElementById(id);
@@ -257,7 +278,16 @@ function applySceneData(sceneId, data) {
 
 function onSceneSelect(e) {
   if (state.dirty && !confirm('Discard unsaved changes?')) return;
-  // Clear any stale draft when explicitly switching scenes
+  // Inline mode: load from bridge app data (no disk fetch needed)
+  const bridge = window.__editorBridge;
+  if (bridge && bridge.app) {
+    const sceneData = bridge.app.data.scenes?.[e.target.value]?.data;
+    if (sceneData) {
+      applySceneData(e.target.value, sceneData);
+    }
+    return;
+  }
+  // Standalone mode: load from disk
   localStorage.removeItem('dialogue_editor_draft');
   _draftSuppressed = false;
   loadScene(e.target.value);
@@ -990,18 +1020,18 @@ function togglePreview() {
   }
 }
 
-function sendPreviewData() {
-  if (!state.previewOpen || !_previewIframe || !_previewReady) return;
-
-  // Build the scene data from current editor state
-  const sceneData = {
+/**
+ * Build a clean scene data object from current editor state.
+ * Strips empty fields and filters empty choices for clean export.
+ */
+function buildSceneData() {
+  return {
     id: state.sceneId || 'preview',
     entryNode: state.nodes[0]?.id || 'start',
     background: state.sceneData?.background || null,
     music: state.sceneData?.music || null,
     nodes: state.nodes.map(n => {
       const c = { ...n };
-      // Strip empty fields for cleaner data
       Object.keys(c).forEach(k => {
         if (c[k] === null || c[k] === undefined || c[k] === '' ||
             (k === 'choices' && Array.isArray(c[k]) && c[k].length === 0)) delete c[k];
@@ -1010,6 +1040,12 @@ function sendPreviewData() {
       return c;
     })
   };
+}
+
+function sendPreviewData() {
+  if (!state.previewOpen || !_previewIframe || !_previewReady) return;
+
+  const sceneData = buildSceneData();
 
   _previewIframe.contentWindow.postMessage({
     type: 'preview-update',
@@ -1032,17 +1068,24 @@ function renderAll() { renderNodeList(); renderEditor(); updatePreview(); }
 function markDirty() {
   state.dirty = true;
   setStatus('Unsaved changes', 'dirty');
-  renderNodeList();
-  renderEditor();
-  updatePreview();
-  if (_draftSuppressed) return;
-  try {
-    localStorage.setItem('dialogue_editor_draft', JSON.stringify({
-      sceneId: state.sceneId, nodes: state.nodes, gameConfig: state.gameConfig,
-      characters: state.characters, variableDefs: state.variableDefs,
-      projectId: state.gameConfig?.title || state.gameConfig?.scenes?.[0] || 'unknown'
-    }));
-  } catch(e) { /* storage full, ignore */ }
+
+  const bridge = window.__editorBridge;
+  if (bridge && bridge.app) {
+    // Inline mode: push scene data through the bridge → parent's save system
+    bridge.onSave(state.sceneId, buildSceneData());
+    return;
+  }
+
+  // Standalone mode: save to localStorage draft (crash recovery)
+  if (!_draftSuppressed) {
+    try {
+      localStorage.setItem('dialogue_editor_draft', JSON.stringify({
+        sceneId: state.sceneId, nodes: state.nodes, gameConfig: state.gameConfig,
+        characters: state.characters, variableDefs: state.variableDefs,
+        projectId: state.gameConfig?.title || state.gameConfig?.scenes?.[0] || 'unknown'
+      }));
+    } catch(e) { /* storage full, ignore */ }
+  }
 }
 
 function setStatus(text, dotClass) {

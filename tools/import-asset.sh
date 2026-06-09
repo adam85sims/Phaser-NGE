@@ -6,14 +6,18 @@
 #   ./tools/import-asset.sh <type> <file_path>
 #
 # Types:
-#   background | bg   → public/assets/backgrounds/
-#   bgm        | music → public/assets/audio/bgm/
-#   sfx        | sound  → public/assets/audio/sfx/
+#   background | bg      → public/assets/backgrounds/
+#   portrait   | port    → public/assets/characters/
+#   bgm        | music   → public/assets/audio/bgm/
+#   sfx        | sound   → public/assets/audio/sfx/
+#   font                 → public/assets/fonts/
 #
 # Examples:
 #   ./tools/import-asset.sh background ~/Downloads/city_night.png
+#   ./tools/import-asset.sh portrait ~/Downloads/elena_face.png
 #   ./tools/import-asset.sh bgm ~/Music/forest_theme.mp3
 #   ./tools/import-asset.sh sfx ~/Downloads/click.wav
+#   ./tools/import-asset.sh font ~/Downloads/NotoSans.ttf
 #
 # The script copies the file, it does not move it.
 # It will warn before overwriting an existing file.
@@ -26,8 +30,10 @@ if [ $# -lt 2 ]; then
   echo ""
   echo "Types:"
   echo "  background | bg    → public/assets/backgrounds/"
+  echo "  portrait   | port  → public/assets/characters/"
   echo "  bgm        | music → public/assets/audio/bgm/"
   echo "  sfx        | sound → public/assets/audio/sfx/"
+  echo "  font               → public/assets/fonts/"
   exit 1
 fi
 
@@ -40,15 +46,21 @@ case "$TYPE" in
   background|bg)
     DEST_DIR="$PROJECT_DIR/public/assets/backgrounds"
     ;;
+  portrait|port)
+    DEST_DIR="$PROJECT_DIR/public/assets/characters"
+    ;;
   bgm|music)
     DEST_DIR="$PROJECT_DIR/public/assets/audio/bgm"
     ;;
   sfx|sound)
     DEST_DIR="$PROJECT_DIR/public/assets/audio/sfx"
     ;;
+  font)
+    DEST_DIR="$PROJECT_DIR/public/assets/fonts"
+    ;;
   *)
     echo "Unknown type: $TYPE"
-    echo "Valid types: background, bgm, sfx"
+    echo "Valid types: background, portrait, bgm, sfx, font"
     exit 1
     ;;
 esac

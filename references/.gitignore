@@ -1,0 +1,4 @@
+# References — cloned repos, research artifacts
+# These are large external repos, not project code.
+# Add specific subdirectory entries for anything with its own .git.
+phas3d/

@@ -1,0 +1,42 @@
+{
+  "id": "start",
+  "entryNode": "start",
+  "background": null,
+  "music": null,
+  "nodes": [
+    {
+      "id": "start",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "This text should persist after clicking away!",
+      "x": -200,
+      "y": -80,
+      "next": "node_2"
+    },
+    {
+      "id": "node_2",
+      "type": "dialogue",
+      "text": "New node",
+      "x": 60,
+      "y": -60
+    },
+    {
+      "id": "node_3",
+      "type": "event",
+      "x": -440,
+      "y": -80
+    }
+  ],
+  "layers": [
+    {
+      "id": "bg_1781025962171",
+      "type": "background",
+      "asset": "BG_forest_00001_",
+      "x": 100,
+      "y": 0,
+      "scale": 1,
+      "zIndex": -66,
+      "opacity": 1
+    }
+  ]
+}

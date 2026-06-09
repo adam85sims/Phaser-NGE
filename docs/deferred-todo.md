@@ -24,3 +24,6 @@ Features identified during the VN UX review but deferred to focus on core improv
 ## Variable System
 - **Variable increment in choices** — add `"addFlag"` / `"delta"` on choice options (currently only `setFlag`/`setValue`)
 - **Subroutine / macro nodes** — reusable node groups (standard "enter room" sequence)
+
+## System Architecture
+- **Multi-project support** — expand the editor and engine to support saving and loading multiple independent projects into `data/projects/<name>/` instead of a single root `data/` folder.

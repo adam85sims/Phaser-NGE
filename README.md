@@ -1,5 +1,28 @@
 # Phaser NGE — Narrative Game Engine
 
+## ⚠️ Status: Active Development (WIP)
+
+**It's a work in progress. Dear god, it's a work in progress.** Don't try to actually use this on something serious yet.
+
+**What works:**
+- ✅ Visual node graph editing (drag, connect, rearrange)
+- ✅ Inspector with live state sync
+- ✅ Character editor (CRUD, expressions, portraits, color picker)
+- ✅ Variable editor (inline editing, filtering, usage tracking)
+- ✅ File explorer (Unity-style two-panel layout)
+- ✅ Asset browser (drag-drop upload, usage tracking)
+- ✅ Game engine (dialogue, choices, conditions, events, save/load)
+
+**What's pending:**
+- 🔲 Backend API for file persistence (save button is mocked)
+- 🔲 Script mode code editor
+- 🔲 Full asset upload pipeline (needs backend endpoint)
+- 🔲 Polish & QA
+
+Use at your own risk. The editor UI is functional but changes don't persist to disk yet.
+
+---
+
 A data-driven narrative game engine for dialogue-based games. Write your story in a visual node editor, or directly in JSON. The engine handles the rest.
 
 **Built with Phaser 4 · Zero middleware · Standalone tools**
@@ -19,9 +42,11 @@ This starts a dev server. Two URLs open up:
 | URL | What it is |
 |-----|-----------|
 | `http://localhost:3000/` | **Play the game** — test your story, see it come to life |
-| `http://localhost:3000/tools/dialogue-editor/` | **Write the story** — visual node graph editor |
+| `http://localhost:3000/tools/index.html` | **Editor v2** — unified IDE for all content creation |
 
 Press **F1**, **F2**, **F3** in the game to switch between test scenes.
+
+> **Note:** The editor's Save button is currently mocked. Export your work manually by copying JSON from the console or using the Export buttons in Characters/Variables tabs.
 
 ---
 
@@ -44,18 +69,29 @@ Everything your story needs lives in the `data/` folder:
 
 ---
 
-## Using the Dialogue Editor
+## Using the Editor v2
 
-1. Open `http://localhost:3000/tools/dialogue-editor/`
-2. Pick a scene from the dropdown (or create a new one)
-3. See your scene as a node graph — each block is a story beat
-4. Click a node to edit its properties in the right panel
-5. Drag between output ports (right circles) and input ports (left circles) to wire connections
-6. Drag nodes to rearrange the layout
-7. Click **Export** to download a `.json` file
-8. Place the file in `data/scenes/`
-9. Add the scene ID to `data/game.json`'s `"scenes"` array
-10. Refresh the game to play your scene
+1. Open `http://localhost:3000/tools/index.html`
+2. The editor has a Unity-style layout:
+   - **Left sidebar**: Scene outline (click to select nodes)
+   - **Center**: Visual preview or node graph
+   - **Right**: Inspector (edit properties)
+   - **Bottom workspace**: Tabbed panels
+3. **Workspace tabs:**
+   - **Files**: Browse project structure (folder tree + file grid)
+   - **Asset Browser**: Manage images, audio, fonts
+   - **Dialogue Editor**: Node graph for visual scripting
+   - **Characters**: Define characters, expressions, portraits
+   - **Variables**: Track game state flags and counters
+4. Click a node in the graph or outline to edit its properties
+5. Drag nodes to rearrange, drag wires to connect
+6. Change X/Y in inspector to move nodes (live sync with graph)
+7. Click **Save** (currently mocked — exports to console)
+
+**Pro tips:**
+- Press **3** in the scene view to toggle 3D grid mode (future hook)
+- Double-click files in the Files tab to open (future: code editor)
+- Use the graph fullscreen button for focused editing
 
 **Node types at a glance:**
 
@@ -204,12 +240,15 @@ Output goes to `dist/` — a standalone HTML/JS bundle you can host anywhere.
 
 ## Creating a New Scene Workflow
 
-1. **Write:** Open the dialogue editor, create a new scene, add nodes
-2. **Export:** Click Export, download the JSON file
-3. **Place:** Copy the file into `data/scenes/`
-4. **Register:** Add the scene ID to `data/game.json`'s `"scenes"` array
-5. **Test:** Refresh the game, press the hotkey or set `startScene` in game.json
-6. **Iterate:** Edit in the editor, re-export, replace the file, refresh
+1. **Write:** Open Editor v2, go to Dialogue Editor tab, create nodes
+2. **Edit:** Select nodes, change properties in inspector, drag to rearrange
+3. **Connect:** Drag wires between output ports and input ports
+4. **Export:** (Pending) For now, manually copy scene JSON from `data/scenes/`
+5. **Register:** Add the scene ID to `data/game.json`'s `"scenes"` array
+6. **Test:** Refresh the game, press the hotkey or set `startScene` in game.json
+7. **Iterate:** Edit in the editor, re-export, replace the file, refresh
+
+> **Tip:** Use the Files tab to browse and verify your scene JSON files. Double-click to open (future: in-editor code view).
 
 ---
 
