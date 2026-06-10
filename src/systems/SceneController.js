@@ -45,6 +45,7 @@ export class SceneController {
       this.onSceneStart({
         sceneId: scene.id,
         background: scene.background,
+        layers: scene.layers,
         music: scene.music
       });
     }
@@ -75,8 +76,8 @@ export class SceneController {
       returnNode: node.next || null
     });
 
-    // Start the sub-scene from its entry
-    this.startScene(node.sceneId);
+    // Start the sub-scene, optionally at a specific node or its entry point
+    this.startScene(node.sceneId, node.nodeId || null);
   }
 
   /* ── Node Processing ───────────────────────── */
@@ -109,6 +110,27 @@ export class SceneController {
         break;
       case 'wait':
         this.doWait(node);
+        break;
+      case 'set_variable':
+        this.setVariableNode(node);
+        break;
+      case 'timed_choice':
+        this.presentTimedChoice(node);
+        break;
+      case 'animate':
+        this.animateNode(node);
+        break;
+      case 'show_object':
+        this.showObjectNode(node);
+        break;
+      case 'hide_object':
+        this.hideObjectNode(node);
+        break;
+      case 'camera':
+        this.cameraNode(node);
+        break;
+      case 'random_branch':
+        this.evaluateRandomBranch(node);
         break;
       case 'call_scene':
         this.callScene(node);
@@ -154,6 +176,7 @@ export class SceneController {
         this.onSceneStart({
           sceneId: pop.scene.id,
           background: pop.scene.background,
+          layers: pop.scene.layers,
           music: pop.scene.music
         });
       }
@@ -183,6 +206,236 @@ export class SceneController {
     }
   }
 
+  /* ── Built-in Node Behaviors ───────────────── */
+
+  setVariableNode(node) {
+    if (node.variable) {
+      if (node.operation === 'add') {
+        this.vars.add(node.variable, Number(node.value) || 0);
+      } else if (node.operation === 'toggle') {
+        this.vars.toggle(node.variable);
+      } else {
+        this.vars.set(node.variable, node.value);
+      }
+    }
+    this.advance();
+  }
+
+  evaluateRandomBranch(node) {
+    const branches = node.choices || [];
+    if (branches.length === 0) {
+      this.advance();
+      return;
+    }
+    const totalWeight = branches.reduce((sum, b) => sum + (Number(b.weight) || 1), 0);
+    let r = Math.random() * totalWeight;
+    let selected = branches[0];
+    for (const b of branches) {
+      const w = Number(b.weight) || 1;
+      if (r < w) {
+        selected = b;
+        break;
+      }
+      r -= w;
+    }
+    this.jumpToId(selected.next);
+  }
+
+  /* ── Visual Node Behaviors (Tier 2) ────────── */
+
+  animateNode(node) {
+    const target = this._resolveTarget(node.target);
+    if (!target) {
+      this.advance();
+      return;
+    }
+
+    const duration = node.duration || 1000;
+    const tweenData = {
+      targets: target,
+      duration: duration,
+      ease: node.easing || 'Linear'
+    };
+
+    if (node.property === 'x' || node.property === 'y' || node.property === 'alpha' || node.property === 'angle' || node.property === 'scale') {
+      tweenData[node.property] = Number(node.value);
+    } else if (node.property === 'zoom' && node.target === 'camera') {
+      tweenData.zoom = Number(node.value);
+    }
+
+    if (node.wait) {
+      this.isRunning = false;
+      tweenData.onComplete = () => {
+        this.isRunning = true;
+        this.advance();
+      };
+      this.scene.tweens.add(tweenData);
+    } else {
+      this.scene.tweens.add(tweenData);
+      this.advance();
+    }
+  }
+
+  showObjectNode(node) {
+    const target = this._resolveTarget(node.target);
+    if (!target) { this.advance(); return; }
+
+    const duration = node.duration || 0;
+    
+    if (duration > 0) {
+      if (node.wait) this.isRunning = false;
+      this.scene.tweens.add({
+        targets: target,
+        alpha: 1,
+        duration: duration,
+        onComplete: () => {
+          if (node.wait) {
+            this.isRunning = true;
+            this.advance();
+          }
+        }
+      });
+      if (!node.wait) this.advance();
+    } else {
+      target.setAlpha(1);
+      this.advance();
+    }
+  }
+
+  hideObjectNode(node) {
+    const target = this._resolveTarget(node.target);
+    if (!target) { this.advance(); return; }
+
+    const duration = node.duration || 0;
+    
+    if (duration > 0) {
+      if (node.wait) this.isRunning = false;
+      this.scene.tweens.add({
+        targets: target,
+        alpha: 0,
+        duration: duration,
+        onComplete: () => {
+          if (node.wait) {
+            this.isRunning = true;
+            this.advance();
+          }
+        }
+      });
+      if (!node.wait) this.advance();
+    } else {
+      target.setAlpha(0);
+      this.advance();
+    }
+  }
+
+  cameraNode(node) {
+    const cam = this.scene.cameras.main;
+    const duration = node.duration || 1000;
+    const value = node.value || '';
+    
+    if (node.wait) this.isRunning = false;
+
+    const onComplete = () => {
+      if (node.wait) {
+        this.isRunning = true;
+        this.advance();
+      }
+    };
+
+    switch (node.action) {
+      case 'shake':
+        const intensity = Number(value) || 0.005;
+        cam.shake(duration, intensity, true, (cam, pct) => { if (pct === 1) onComplete(); });
+        if (!node.wait) this.advance();
+        return;
+      case 'flash':
+        cam.flash(duration, 255, 255, 255, true, (cam, pct) => { if (pct === 1) onComplete(); });
+        if (!node.wait) this.advance();
+        return;
+      case 'fade_in':
+        cam.fadeIn(duration, 0, 0, 0, (cam, pct) => { if (pct === 1) onComplete(); });
+        if (!node.wait) this.advance();
+        return;
+      case 'fade_out':
+        cam.fadeOut(duration, 0, 0, 0, (cam, pct) => { if (pct === 1) onComplete(); });
+        if (!node.wait) this.advance();
+        return;
+      case 'zoom':
+        cam.zoomTo(Number(value) || 1, duration, 'Linear', true, (cam, pct) => { if (pct === 1) onComplete(); });
+        if (!node.wait) this.advance();
+        return;
+      case 'pan':
+        const [px, py] = value.split(',').map(Number);
+        cam.pan(px || cam.centerX, py || cam.centerY, duration, 'Linear', true, (cam, pct) => { if (pct === 1) onComplete(); });
+        if (!node.wait) this.advance();
+        return;
+      default:
+        this.advance();
+    }
+  }
+
+  _resolveTarget(targetId) {
+    if (!targetId) return null;
+    if (targetId === 'camera') return this.scene.cameras.main;
+    
+    // Check LayerSystem
+    if (this.scene.layers) {
+      const layer = this.scene.layers.getLayer(targetId);
+      if (layer) return layer;
+    }
+    
+    // Check CharacterSystem
+    if (this.scene.characters && this.scene.characters.portraits[targetId]) {
+      return this.scene.characters.portraits[targetId];
+    }
+    
+    console.warn(`Target not found for animation/visibility: ${targetId}`);
+    return null;
+  }
+
+  presentTimedChoice(node) {
+    const validChoices = (node.choices || []).filter(c => this.vars.evaluate(c.condition));
+    if (validChoices.length === 0) {
+      this.jumpToId(node.default_next || node.next);
+      return;
+    }
+    
+    this._pendingChoices = validChoices;
+    this.isRunning = false;
+    if (this.onChoice) {
+      // Let the DialogueSystem know it's a timed choice, but for now we'll handle the timer here
+      this.onChoice({
+        prompt: node.prompt || null,
+        choices: validChoices.map(c => ({
+          text: c.text,
+          index: validChoices.indexOf(c),
+          next: c.next,
+          nextScene: c.nextScene,
+          setFlag: c.setFlag,
+          setValue: c.setValue,
+          toggleFlag: c.toggleFlag,
+          addFlag: c.addFlag,
+          delta: c.delta
+        })),
+        duration: node.duration || 5000
+      });
+
+      // Setup the fallback timer
+      this._choiceTimer = this.scene.time.addEvent({
+        delay: node.duration || 5000,
+        callback: () => {
+          this.scene.dialogue.hideChoices();
+          this._choiceTimer = null;
+          this.isRunning = true;
+          this.jumpToId(node.default_next || node.next);
+        }
+      });
+    } else {
+      this.isRunning = true;
+      this.advance();
+    }
+  }
+
   /* ── Node Types ────────────────────────────── */
 
   showDialogue(node) {
@@ -194,7 +447,8 @@ export class SceneController {
         position: node.position || 'center',
         zIndex: node.zIndex || 0,
         autoAdvance: node.autoAdvance || false,
-        waitTime: node.waitTime || 0
+        waitTime: node.waitTime || 0,
+        comment: node.comment || null
       });
     }
 
@@ -324,6 +578,11 @@ export class SceneController {
 
   /** Called when user selects a choice */
   selectChoice(choiceIndex) {
+    if (this._choiceTimer) {
+      this._choiceTimer.remove(false);
+      this._choiceTimer = null;
+    }
+
     const choices = this._pendingChoices;
     if (!choices || choiceIndex < 0 || choiceIndex >= choices.length) return;
 
@@ -361,7 +620,7 @@ export class SceneController {
   }
 
   get isAtChoice() {
-    return this.currentNode?.type === 'choice' && this._pendingChoices !== null;
+    return (this.currentNode?.type === 'choice' || this.currentNode?.type === 'timed_choice') && this._pendingChoices !== null;
   }
 
   destroy() {

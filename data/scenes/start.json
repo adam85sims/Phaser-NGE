@@ -9,27 +9,39 @@
       "type": "dialogue",
       "speaker": "narrator",
       "text": "This text should persist after clicking away!",
-      "x": -340,
-      "y": -80,
+      "x": -460,
+      "y": -100,
       "next": "node_2"
     },
     {
       "id": "node_2",
-      "type": "dialogue",
+      "type": "wait",
       "text": "New node. This is a test.",
-      "x": -20,
-      "y": -40
+      "x": -140,
+      "y": -40,
+      "choices": [],
+      "prompt": "",
+      "next": "end_1",
+      "duration": 1000
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "x": 140,
+      "y": -40,
+      "text": "",
+      "nextScene": "test_scene"
     }
   ],
   "layers": [
     {
-      "id": "bg_1781025962171",
+      "id": "bg_1781070390164",
       "type": "background",
-      "asset": "BG_forest_00001_",
+      "asset": "BG_lakeside_00001_",
       "x": 0,
       "y": 0,
       "scale": 1,
-      "zIndex": -66,
+      "zIndex": 0,
       "opacity": 1
     }
   ]

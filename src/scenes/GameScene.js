@@ -6,6 +6,8 @@ import { DialogueSystem } from '../systems/DialogueSystem.js';
 import { CharacterSystem } from '../systems/CharacterSystem.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { AudioSystem } from '../systems/AudioSystem.js';
+import { Settings } from '../systems/SettingsSystem.js';
+import { LayerSystem } from '../systems/LayerSystem.js';
 
 /**
  * GameScene — the main gameplay loop.
@@ -23,9 +25,8 @@ export class GameScene extends Phaser.Scene {
     // ── Check for scene data passed from MenuScene (Continue) ──
     const initData = this.scene.settings.data || {};
 
-    // ── Background ──
-    this.bg = this.add.graphics();
-    this._drawBackground(null);
+    // Background layer (depth 0)
+    this.layers = new LayerSystem(this);
 
     // ── Initialize systems ──
     this.vars = new VariableSystem();
@@ -81,7 +82,7 @@ export class GameScene extends Phaser.Scene {
     };
 
     ctrl.onSceneStart = (data) => {
-      this._drawBackground(data.background);
+      this.layers.loadSceneLayers(data.layers, data.background);
       this.cameras.main.fadeIn(400, 0, 0, 0);
       if (data.music) this.audio.playBGM(data.music);
 
@@ -118,7 +119,8 @@ export class GameScene extends Phaser.Scene {
           this.audio.playBGM(data.value);
           break;
         case 'bg_change':
-          this._drawBackground(data.value);
+          // Legacy support: re-load the single layer
+          this.layers.loadSceneLayers([], data.value);
           break;
         case 'camera_shake':
           const [dur, int] = (data.value || '200,0.005').split(',').map(Number);
@@ -156,7 +158,8 @@ export class GameScene extends Phaser.Scene {
     };
 
     ctrl.onBackgroundChange = (key) => {
-      this._drawBackground(key);
+      // Legacy support
+      this.layers.loadSceneLayers([], key);
     };
   }
 
@@ -266,43 +269,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /* ── BACKGROUND ────────────────────────────── */
 
-  _drawBackground(key) {
-    // Remove existing background sprite if any
-    if (this.bgSprite) {
-      this.bgSprite.destroy();
-      this.bgSprite = null;
-    }
-
-    // Try to load a background image
-    const texKey = key ? `bg_${key}` : null;
-    if (texKey && this.textures.exists(texKey)) {
-      this.bgSprite = this.add.image(this.W / 2, this.H / 2, texKey);
-      this.bgSprite.setDisplaySize(this.W, this.H);
-      this.bgSprite.setDepth(0);
-      this.bg.clear(); // Clear the gradient
-      return;
-    }
-
-    // Fallback to procedural gradient
-    this.bg.clear();
-    const colors = [0x0a0a1a, 0x0f0f2a, 0x1a0a2a];
-    const steps = 60;
-    for (let i = 0; i < steps; i++) {
-      const t = i / steps;
-      const ci = t < 0.5 ? 0 : (t < 0.8 ? 1 : 2);
-      const next = ci < 2 ? ci + 1 : ci;
-      const lt = (t - ci * 0.5) * 2;
-      const color = Phaser.Display.Color.Interpolate.ColorWithColor(
-        Phaser.Display.Color.IntegerToColor(colors[ci]),
-        Phaser.Display.Color.IntegerToColor(colors[next]),
-        100, lt * 100
-      );
-      this.bg.fillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1);
-      this.bg.fillRect(0, (i / steps) * this.H, this.W, this.H / steps + 1);
-    }
-  }
 
   _cleanupUI() {
     this.dialogue.setVisible(false);
@@ -340,9 +307,6 @@ export class GameScene extends Phaser.Scene {
     this.dialogue.destroy();
     this.characters.destroy();
     this.audio.destroy();
-    if (this.bgSprite) {
-      this.bgSprite.destroy();
-      this.bgSprite = null;
-    }
+    this.layers.destroy();
   }
 }

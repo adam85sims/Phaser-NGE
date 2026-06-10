@@ -8,7 +8,8 @@ export const $ = id => document.getElementById(id);
 
 /** Fetch JSON with error handling */
 export async function fetchJSON(url) {
-  const r = await fetch(url);
+  const sep = url.includes('?') ? '&' : '?';
+  const r = await fetch(`${url}${sep}t=${Date.now()}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
   return r.json();
 }

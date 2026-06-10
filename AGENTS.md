@@ -97,6 +97,12 @@ Phaser-NGE/
 ├── docs/
 │   ├── qa-checklist.md        # Manual QA test plan (Phaser-dependent systems)
 │   └── deferred-todo.md
+│
+├── .brain/                    # Antigravity AI memory (read-only reference)
+│   ├── map.json               # Project component map
+│   ├── memory.md              # Decision log & gotchas
+│   └── session.md             # Session state
+│
 └── vite.config.js
 ```
 
@@ -265,3 +271,16 @@ Or use the editor's asset browser (uploads via `/api/upload-asset`).
 - Background keys are filename **stems**, not full filenames (`cloudsnight` for `cloudsnight.png`).
 - Editor's "Save" button is **not** mock-only now — it POSTs to `/api/save` (handled by `tools/editor-backend.js`). The README's "save is mocked" claim is stale.
 - The two stray root scripts (`run_puppeteer.cjs`, `strip_graph.cjs`) are one-off dev tools, not part of the dev workflow. Don't `require` them from new code.
+
+## `.brain/` — Antigravity AI Memory
+
+The `.brain/` folder (managed by Antigravity) stores AI session context and project memory. It is **read-only reference** for the agent — do not modify its contents.
+
+```
+.brain/
+├── map.json    # Project component map
+├── memory.md   # Decision log & gotchas (append-only)
+└── session.md  # Per-session state
+```
+
+If Antigravity adds new files or schemas to `.brain/`, update this section accordingly.

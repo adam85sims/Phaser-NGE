@@ -249,7 +249,25 @@ body[data-dirty="true"] #inspector {
 }
 .tree-parent { font-weight: 500; }
 .tree-chevron { width: 12px; height: 12px; color: var(--text-dim); flex-shrink: 0; }
-.tree-children { margin-left: 16px; margin-top: 2px; display: flex; flex-direction: column; gap: 1px; }
+.tree-children-wrapper {
+  display: grid;
+}
+.tree-children-wrapper.animate-expand {
+  animation: expandGrid 0.2s var(--ease) forwards;
+}
+.tree-children {
+  min-height: 0;
+  overflow: hidden;
+  margin-left: 16px;
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+@keyframes expandGrid {
+  from { grid-template-rows: 0fr; opacity: 0; transform: translateY(-4px); }
+  to { grid-template-rows: 1fr; opacity: 1; transform: translateY(0); }
+}
 
 /* ══════════════════════════════════════════
    SCENE VIEW (center column)
@@ -945,23 +963,27 @@ body[data-dirty="true"] #inspector {
 }
 
 /* Tree view (folder sidebar) */
-.tree-item {
-  font-size: 12px;
-  user-select: none;
+.tree-node {
+  /* wrapper for tree-item + its children */
 }
-.tree-item > div {
+.tree-children {
+  /* block container for child nodes — sits below parent */
+}
+.tree-item {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 12px;
+  user-select: none;
   transition: background 0.1s;
 }
-.tree-item > div:hover {
+.tree-item:hover {
   background: var(--bg-elevated);
 }
-.tree-item.selected > div {
+.tree-item.selected {
   background: var(--accent-dim);
   color: var(--text-bright);
 }

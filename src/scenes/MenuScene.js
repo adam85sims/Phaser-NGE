@@ -22,62 +22,79 @@ export class MenuScene extends Phaser.Scene {
     this._showMenu(W, H, title);
   }
 
-  _showMenu(W, H, title) {
-    // Clear any existing children (in case of re-entry)
+  _showMenu(W, H, defaultTitle) {
     this.children.removeAll(true);
+    
+    const config = Data.theme?.ui?.menu;
 
-    // Redraw background
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x1a0a3a, 0x1a0a3a, 1);
-    bg.fillRect(0, 0, W, H);
+    // Background
+    if (config?.background && this.textures.exists(`bg_${config.background}`)) {
+      this.add.image(W/2, H/2, `bg_${config.background}`).setDisplaySize(W, H).setOrigin(0.5);
+    } else {
+      const bg = this.add.graphics();
+      bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x1a0a3a, 0x1a0a3a, 1);
+      bg.fillRect(0, 0, W, H);
+    }
+    
+    if (!config) {
+      // Fallback UI (no theme data)
+      this.add.text(W / 2, 220, defaultTitle, { fontSize: '56px', fontFamily: 'monospace', color: '#ffffff' }).setOrigin(0.5);
+      this.add.text(W / 2, 280, '— Phaser NGE —', { fontSize: '18px', fontFamily: 'monospace', color: '#666688' }).setOrigin(0.5);
+      
+      const startBtn = this.add.text(W / 2, 420, '▶  Start Game', { fontSize: '22px', fontFamily: 'monospace', color: '#00ccff' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      startBtn.on('pointerover', () => startBtn.setColor('#ffffff'));
+      startBtn.on('pointerout', () => startBtn.setColor('#00ccff'));
+      startBtn.on('pointerdown', () => this._sceneTransition('GameScene'));
+      this.tweens.add({ targets: startBtn, alpha: 0.6, duration: 1500, yoyo: true, repeat: -1 });
+      return;
+    }
 
     // Title
-    this.add.text(W / 2, 220, title, {
-      fontSize: '56px', fontFamily: 'monospace', color: '#ffffff',
+    this.add.text(config.title.x, config.title.y, config.title.text, {
+      fontSize: `${config.title.size}px`, fontFamily: config.title.font, color: config.title.color
     }).setOrigin(0.5);
 
     // Subtitle
-    this.add.text(W / 2, 280, '— Phaser NGE —', {
-      fontSize: '18px', fontFamily: 'monospace', color: '#666688',
+    this.add.text(config.subtitle.x, config.subtitle.y, config.subtitle.text, {
+      fontSize: `${config.subtitle.size}px`, fontFamily: config.subtitle.font, color: config.subtitle.color
     }).setOrigin(0.5);
 
-    // Start Game button
-    const startBtn = this.add.text(W / 2, 420, '▶  Start Game', {
-      fontSize: '22px', fontFamily: 'monospace', color: '#00ccff',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    startBtn.on('pointerover', () => startBtn.setColor('#ffffff'));
-    startBtn.on('pointerout', () => startBtn.setColor('#00ccff'));
-    startBtn.on('pointerdown', () => this._sceneTransition('GameScene'));
-
-    // Continue button
     const slots = JSON.parse(localStorage.getItem('narrative_saves') || '[]');
     const hasSave = slots.some(s => s !== null && s !== undefined);
-    const continueBtn = this.add.text(W / 2, 480, '▶  Continue', {
-      fontSize: '18px', fontFamily: 'monospace',
-      color: hasSave ? '#88aa88' : '#444444',
-    }).setOrigin(0.5);
-    if (hasSave) {
-      continueBtn.setInteractive({ useHandCursor: true });
-      continueBtn.on('pointerover', () => continueBtn.setColor('#ffffff'));
-      continueBtn.on('pointerout', () => continueBtn.setColor('#88aa88'));
-      continueBtn.on('pointerdown', () => this._loadAutoSave());
-    }
 
-    // Settings button
-    const settingsBtn = this.add.text(W / 2, 540, '⚙  Settings', {
-      fontSize: '18px', fontFamily: 'monospace', color: '#aaaaaa',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    settingsBtn.on('pointerover', () => settingsBtn.setColor('#ffffff'));
-    settingsBtn.on('pointerout', () => settingsBtn.setColor('#aaaaaa'));
-    settingsBtn.on('pointerdown', () => this._showSettings(W, H));
+    // Buttons
+    let startBtnObj = null;
+    config.buttons.forEach(btn => {
+      const text = this.add.text(btn.x, btn.y, btn.label, {
+        fontSize: `${btn.size}px`, fontFamily: btn.font, color: btn.color
+      }).setOrigin(0.5);
 
-    // Input
+      if (btn.id === 'continue' && !hasSave) {
+        text.setAlpha(0.5);
+        return;
+      }
+
+      text.setInteractive({ useHandCursor: true });
+      text.on('pointerover', () => text.setColor(btn.hoverColor || '#ffffff'));
+      text.on('pointerout', () => text.setColor(btn.color));
+
+      if (btn.id === 'start') {
+        startBtnObj = text;
+        text.on('pointerdown', () => this._sceneTransition('GameScene'));
+      } else if (btn.id === 'continue') {
+        text.on('pointerdown', () => this._loadAutoSave());
+      } else if (btn.id === 'settings') {
+        text.on('pointerdown', () => this._showSettings(W, H));
+      }
+    });
+
     this.input.keyboard.removeAllListeners();
     this.input.keyboard.on('keydown-SPACE', () => this._sceneTransition('GameScene'));
     this.input.keyboard.on('keydown-ENTER', () => this._sceneTransition('GameScene'));
 
-    // Pulse on start
-    this.tweens.add({ targets: startBtn, alpha: 0.6, duration: 1500, yoyo: true, repeat: -1 });
+    if (startBtnObj) {
+      this.tweens.add({ targets: startBtnObj, alpha: 0.6, duration: 1500, yoyo: true, repeat: -1 });
+    }
   }
 
   _showSettings(W, H) {

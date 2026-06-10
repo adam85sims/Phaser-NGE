@@ -1,5 +1,6 @@
 {
   "title": "Dave is Drowning",
+  "schemaVersion": "1.0",
   "version": "1.0.0",
   "startScene": "start",
   "scenes": [

@@ -1,4 +1,5 @@
 import { fetchJSON } from './shared/utils.js';
+import { backend } from './shared/backend-adapter.js';
 
 export const editorState = {
   // Project Data
@@ -6,11 +7,13 @@ export const editorState = {
   characters: {},
   variableDefs: {},
   scenes: {},
+  theme: {},
   
   // UI State
   selectedItemId: null,
   selectedItemType: null, // 'scene', 'node', 'character', 'variable'
   activeSceneId: null,
+  expandedScenes: new Set(),
   activeWorkspaceTab: 'dialogue',
   dirty: false,
 
@@ -36,28 +39,37 @@ let _saveTimer = null;
 
 export async function loadProjectData() {
   try {
-    const [game, chars, vars] = await Promise.all([
-      fetchJSON('/data/game.json'),
-      fetchJSON('/data/characters.json'),
-      fetchJSON('/data/variables.json')
+    const [game, chars, vars, theme] = await Promise.all([
+      backend.fetchGameConfig(),
+      backend.fetchCharacters(),
+      backend.fetchVariables(),
+      backend.fetchTheme()
     ]);
 
     editorState.gameConfig = game;
     editorState.characters = chars;
     editorState.variableDefs = vars;
+    editorState.theme = theme;
     editorState.stats.sceneCount = (game.scenes || []).length;
 
     let totalNodes = 0;
     
     // Load scenes
+    const validScenes = [];
     for (const id of (game.scenes || [])) {
       try {
-        const scene = await fetchJSON(`/data/scenes/${id}.json`);
+        const scene = await backend.fetchScene(id);
         editorState.scenes[id] = scene;
         totalNodes += (scene.nodes || []).length;
+        validScenes.push(id);
       } catch (e) {
         console.warn('Skipping missing scene:', id);
       }
+    }
+    // Self-heal: purge missing scenes from the registry
+    if (validScenes.length !== (game.scenes || []).length) {
+      editorState.gameConfig.scenes = validScenes;
+      markDirty();
     }
     
     editorState.stats.nodeCount = totalNodes;
@@ -65,6 +77,7 @@ export async function loadProjectData() {
     // Select first scene by default
     if (game.scenes?.length > 0) {
       editorState.activeSceneId = game.scenes[0];
+      editorState.expandedScenes.add(game.scenes[0]);
     }
     
   } catch (e) {
@@ -80,6 +93,7 @@ export function serializeProject() {
     game: editorState.gameConfig,
     characters: editorState.characters,
     variables: editorState.variableDefs,
+    theme: editorState.theme,
     scenes: editorState.scenes
   };
 }
@@ -87,12 +101,9 @@ export function serializeProject() {
 export async function saveProjectToBackend() {
   try {
     const data = serializeProject();
-    const res = await fetch('/api/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!res.ok) throw new Error('Save failed');
+    await backend.saveProject(data);
+    // Clear legacy local storage save so engine loads fresh disk files
+    localStorage.removeItem('nge_editor_data');
   } catch (e) {
     console.warn('Project save failed:', e);
   }

@@ -1,6 +1,6 @@
 import { editorState, markDirty } from './state.js';
 
-const TYPE_COLORS = { dialogue: '#3b82f6', choice: '#f59e0b', condition: '#10b981', event: '#8b5cf6', call_scene: '#ec4899', wait: '#64748b', end: '#ef4444' };
+const TYPE_COLORS = { dialogue: '#3b82f6', choice: '#f59e0b', condition: '#10b981', event: '#8b5cf6', call_scene: '#ec4899', wait: '#64748b', end: '#ef4444', set_variable: '#059669', timed_choice: '#d97706', random_branch: '#6366f1', animate: '#0284c7', show_object: '#14b8a6', hide_object: '#94a3b8', camera: '#8b5cf6' };
 const NODE_W = 200, NODE_H = 64, PORT_R = 6;
 
 let canvas, ctx;
@@ -58,9 +58,19 @@ export function mountGraph(container) {
   };
   requestAnimationFrame(renderLoop);
 
+  // Reset camera when scene changes
+  window.addEventListener('scene:changed', () => {
+    if (graphState) {
+      graphState.camera.x = -300;
+      graphState.camera.y = 0;
+      graphState.zoom = 1;
+    }
+  });
+
   // ── Context menu ──
   canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     showContextMenu(e.clientX, e.clientY);
   });
 
@@ -68,16 +78,25 @@ export function mountGraph(container) {
   document.addEventListener('click', closeContextMenu, false);
   document.addEventListener('contextmenu', closeContextMenu, false);
 
-  // Keyboard: Delete/Backspace removes selected node
+  // Keyboard: Delete/Backspace removes selected node, Cmd+Space / Ctrl+Space opens search palette
   document.addEventListener('keydown', (e) => {
+    // Ignore if typing in an input (unless it's the palette input itself and we're not deleting)
+    const tag = document.activeElement ? document.activeElement.tagName : '';
+    const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      // Ignore if typing in an input
-      const tag = document.activeElement ? document.activeElement.tagName : '';
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-      // Only act when graph canvas is focused/visible
+      if (inInput) return;
       if (canvas && canvas.offsetParent !== null) {
         deleteSelectedNode();
+      }
+    }
+    
+    if (e.code === 'Space' && (e.metaKey || e.ctrlKey)) {
+      if (canvas && canvas.offsetParent !== null) {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        // Center of the canvas
+        showContextMenu(rect.left + rect.width / 2, rect.top + rect.height / 2);
       }
     }
   });
@@ -194,57 +213,118 @@ function showContextMenu(mx, my) {
   const canvasX = mx - rect.left;
   const canvasY = my - rect.top;
 
-  // Check if we right-clicked on a node
   const hit = hitTest(canvasX, canvasY);
   const onNode = hit && hit.type === 'node';
-  const onPort = hit && hit.type === 'port';
 
   const menu = document.createElement('div');
   menu.id = 'graph-context-menu';
   menu.style.cssText = `
     position: fixed; left: ${mx}px; top: ${my}px; z-index: 9999;
     background: #1a1a2e; border: 1px solid #333; border-radius: 6px;
-    padding: 4px 0; min-width: 180px;
+    padding: 6px; min-width: 200px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     font-size: 12px; font-family: sans-serif;
+    display: flex; flex-direction: column; gap: 6px;
   `;
 
-  function addItem(label, onClick, dangerous = false) {
-    const item = document.createElement('div');
-    item.textContent = label;
-    item.style.cssText = `
-      padding: 6px 14px; cursor: pointer; color: ${dangerous ? '#ef4444' : '#ccc'};
-      transition: background 0.1s;
-    `;
-    item.addEventListener('mouseenter', () => { item.style.background = '#2a2a44'; });
-    item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
-    item.addEventListener('click', (e) => { e.stopPropagation(); onClick(); closeContextMenu(); });
-    menu.appendChild(item);
-  }
+  // Search input
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Search nodes...';
+  input.style.cssText = `
+    background: var(--bg-input); color: var(--text-bright);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 6px; outline: none; font-size: 12px;
+  `;
+  menu.appendChild(input);
 
-  function addDivider() {
-    const div = document.createElement('div');
-    div.style.cssText = 'height:1px; background:#333; margin:4px 0;';
-    menu.appendChild(div);
-  }
+  const list = document.createElement('div');
+  list.style.cssText = 'max-height: 250px; overflow-y: auto; display: flex; flex-direction: column;';
+  menu.appendChild(list);
 
-  // Get world coords for placement
   const wpos = screenToWorld(canvasX, canvasY);
 
-  addItem('Add Dialogue Node', () => createNode('dialogue', wpos.x, wpos.y));
-  addItem('Add Choice Node', () => createNode('choice', wpos.x, wpos.y));
-  addItem('Add Condition Node', () => createNode('condition', wpos.x, wpos.y));
-  addItem('Add Event Node', () => createNode('event', wpos.x, wpos.y));
-  addItem('Add Wait Node', () => createNode('wait', wpos.x, wpos.y));
-  addItem('Add End Node', () => createNode('end', wpos.x, wpos.y));
+  const nodeTypes = [
+    { label: 'Dialogue', type: 'dialogue' },
+    { label: 'Choice', type: 'choice' },
+    { label: 'Condition', type: 'condition' },
+    { label: 'Event', type: 'event' },
+    { label: 'Wait', type: 'wait' },
+    { label: 'End Scene', type: 'end' },
+    { label: 'Set Variable', type: 'set_variable' },
+    { label: 'Timed Choice', type: 'timed_choice' },
+    { label: 'Random Branch', type: 'random_branch' },
+    { label: 'Animate', type: 'animate' },
+    { label: 'Show Object', type: 'show_object' },
+    { label: 'Hide Object', type: 'hide_object' },
+    { label: 'Camera', type: 'camera' }
+  ];
 
-  if (onNode) {
-    addDivider();
-    addItem('Delete Node "' + hit.nodeId + '"', () => deleteNode(hit.nodeId), true);
+  function renderList(filter = '') {
+    list.innerHTML = '';
+    const f = filter.toLowerCase();
+    
+    // Add Node actions
+    nodeTypes.filter(n => n.label.toLowerCase().includes(f) || n.type.includes(f)).forEach(n => {
+      const item = document.createElement('div');
+      item.textContent = '+ ' + n.label;
+      item.style.cssText = `
+        padding: 6px 8px; cursor: pointer; color: #ccc; border-radius: 4px;
+        transition: background 0.1s;
+      `;
+      item.addEventListener('mouseenter', () => { item.style.background = '#2a2a44'; });
+      item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+      item.addEventListener('click', (e) => { 
+        e.stopPropagation(); 
+        createNode(n.type, wpos.x, wpos.y); 
+        closeContextMenu(); 
+      });
+      list.appendChild(item);
+    });
+
+    // Node specific actions (Delete)
+    if (onNode && 'delete'.includes(f)) {
+      const div = document.createElement('div');
+      div.style.cssText = 'height:1px; background:#333; margin:4px 0;';
+      list.appendChild(div);
+
+      const del = document.createElement('div');
+      del.textContent = 'Delete Node "' + hit.nodeId + '"';
+      del.style.cssText = `
+        padding: 6px 8px; cursor: pointer; color: #ef4444; border-radius: 4px;
+        transition: background 0.1s;
+      `;
+      del.addEventListener('mouseenter', () => { del.style.background = '#2a2a44'; });
+      del.addEventListener('mouseleave', () => { del.style.background = 'transparent'; });
+      del.addEventListener('click', (e) => { 
+        e.stopPropagation(); 
+        deleteNode(hit.nodeId); 
+        closeContextMenu(); 
+      });
+      list.appendChild(del);
+    }
   }
+
+  renderList();
+
+  input.addEventListener('input', (e) => renderList(e.target.value));
+  
+  // Handle enter key in input
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const first = list.querySelector('div[style*="cursor: pointer"]');
+      if (first) first.click();
+    }
+  });
+
+  // Prevent closing menu when clicking inside
+  menu.addEventListener('click', (e) => e.stopPropagation());
 
   contextMenu = menu;
   document.body.appendChild(menu);
+  
+  // Focus search
+  setTimeout(() => input.focus(), 10);
 }
 
 function closeContextMenu() {
@@ -382,6 +462,13 @@ function renderCanvas() {
     ctx.font = `${9 * graphState.zoom}px sans-serif`;
     ctx.fillText(node.type.toUpperCase(), s.x + 8 * graphState.zoom, s.y + 35 * graphState.zoom);
 
+    // Play button
+    const playBtnX = s.x + sw - 20 * graphState.zoom - (node.comment ? 20 * graphState.zoom : 0);
+    const playBtnY = s.y + 22 * graphState.zoom;
+    ctx.fillStyle = '#22c55e';
+    ctx.font = `${10 * graphState.zoom}px sans-serif`;
+    ctx.fillText('▶', playBtnX, playBtnY);
+
     // Comment indicator
     if (node.comment) {
       ctx.fillStyle = '#fde047';
@@ -483,6 +570,12 @@ function onPointerDown(e) {
     graphState.dragging = { nodeId: hit.nodeId, startX: mx, startY: my, nodeX: node?.x, nodeY: node?.y };
     return;
   }
+  if (hit?.type === 'play-btn') {
+    if (window.__playFromNode) {
+      window.__playFromNode(hit.nodeId);
+    }
+    return;
+  }
   graphState.panning = true;
   graphState.panStart = { x: mx - graphState.camera.x * graphState.zoom, y: my - graphState.camera.y * graphState.zoom };
   
@@ -559,6 +652,14 @@ function hitTest(mx, my) {
         const dx = mx - oports[p].x, dy = my - oports[p].y;
         if (dx * dx + dy * dy < 100) return { type: 'port', nodeId: node.id, portIndex: p };
       }
+      
+      // Play btn hit box
+      const playBtnX = s.x + sw - 20 * graphState.zoom - (node.comment ? 20 * graphState.zoom : 0);
+      const playBtnY = s.y + 22 * graphState.zoom;
+      const dxPlay = mx - (playBtnX + 5 * graphState.zoom);
+      const dyPlay = my - (playBtnY - 4 * graphState.zoom);
+      if (dxPlay * dxPlay + dyPlay * dyPlay < 144) return { type: 'play-btn', nodeId: node.id };
+
       return { type: 'node', nodeId: node.id };
     }
   }

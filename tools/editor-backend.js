@@ -2,7 +2,10 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 
-export default function editorBackend() {
+export default function editorBackend(options = {}) {
+  // For future launcher support, projectRoot defaults to cwd but can be overridden
+  const projectRoot = options.projectRoot || process.cwd();
+  
   return {
     name: 'editor-backend',
     configureServer(server) {
@@ -14,7 +17,7 @@ export default function editorBackend() {
         if (req.method === 'GET') {
           if (req.url === '/api/list-assets') {
             try {
-              const baseDir = path.resolve('public', 'assets');
+              const baseDir = path.join(projectRoot, 'public', 'assets');
               const result = {};
 
               const dirs = {
@@ -75,7 +78,7 @@ export default function editorBackend() {
 
           if (req.url === '/api/save') {
             try {
-              const dataDir = path.resolve('data');
+              const dataDir = path.join(projectRoot, 'data');
               const scenesDir = path.join(dataDir, 'scenes');
 
               // Ensure directories exist
@@ -86,6 +89,7 @@ export default function editorBackend() {
               if (payload.game) await fs.writeFile(path.join(dataDir, 'game.json'), JSON.stringify(payload.game, null, 2));
               if (payload.characters) await fs.writeFile(path.join(dataDir, 'characters.json'), JSON.stringify(payload.characters, null, 2));
               if (payload.variables) await fs.writeFile(path.join(dataDir, 'variables.json'), JSON.stringify(payload.variables, null, 2));
+              if (payload.theme) await fs.writeFile(path.join(dataDir, 'theme.json'), JSON.stringify(payload.theme, null, 2));
 
               // Write scenes
               if (payload.scenes) {
@@ -111,7 +115,7 @@ export default function editorBackend() {
             }
           } else if (req.url === '/api/project/new') {
             try {
-              const dataDir = path.resolve('data');
+              const dataDir = path.join(projectRoot, 'data');
               const scenesDir = path.join(dataDir, 'scenes');
               
               await fs.mkdir(scenesDir, { recursive: true });
@@ -155,7 +159,7 @@ export default function editorBackend() {
               };
               
               const subDir = categoryToDir[category] || category;
-              const assetsDir = path.resolve('public', 'assets', subDir);
+              const assetsDir = path.join(projectRoot, 'public', 'assets', subDir);
               await fs.mkdir(assetsDir, { recursive: true });
               
               // Decode base64

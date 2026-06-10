@@ -1,0 +1,39 @@
+{
+  "entry_points": {
+    "engine": "src/main.js",
+    "editor_v2": "tools/index.html"
+  },
+  "key_components": {
+    "engine": {
+      "BootScene": "src/scenes/BootScene.js",
+      "MenuScene": "src/scenes/MenuScene.js",
+      "GameScene": "src/scenes/GameScene.js",
+      "DataLoader": "src/systems/DataLoader.js",
+      "SceneController": "src/systems/SceneController.js",
+      "VariableSystem": "src/systems/VariableSystem.js",
+      "DialogueSystem": "src/systems/DialogueSystem.js",
+      "CharacterSystem": "src/systems/CharacterSystem.js",
+      "SaveSystem": "src/systems/SaveSystem.js",
+      "AudioSystem": "src/systems/AudioSystem.js"
+    },
+    "editor": {
+      "app": "tools/app.js",
+      "graph": "tools/graph.js",
+      "inspector": "tools/inspector.js",
+      "state": "tools/state.js",
+      "backend_adapter": "tools/shared/backend-adapter.js",
+      "backend_plugin": "tools/editor-backend.js"
+    }
+  },
+  "data_schema": {
+    "game": "data/game.json",
+    "characters": "data/characters.json",
+    "variables": "data/variables.json",
+    "theme": "data/theme.json",
+    "scenes": "data/scenes/*.json"
+  },
+  "tests": {
+    "setup": "tests/setup.js",
+    "systems": "tests/systems/*.test.js"
+  }
+}

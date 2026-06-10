@@ -1,18 +1,91 @@
 {
   "dialogue": {
-    "textBoxSize": { "width": 1180, "height": 180 },
-    "textBoxPosition": { "x": 50, "y": 520 },
+    "textBoxSize": {
+      "width": 1180,
+      "height": 180
+    },
+    "textBoxPosition": {
+      "x": 50,
+      "y": 520
+    },
     "textSpeed": 40,
     "fontSize": 28,
     "fontFamily": "monospace",
     "textColor": "#ffffff",
     "backgroundColor": "#22224488",
-    "padding": { "x": 30, "y": 20 },
+    "padding": {
+      "x": 30,
+      "y": 20
+    },
     "transitionDuration": 300
   },
   "ui": {
-    "toastPosition": { "x": 640, "y": 360 },
+    "toastPosition": {
+      "x": 640,
+      "y": 360
+    },
     "toastFontSize": 24,
-    "toastBackgroundColor": "#00000088"
+    "toastBackgroundColor": "#00000088",
+    "menu": {
+      "background": null,
+      "title": {
+        "text": "Dave is Drowning",
+        "x": 640,
+        "y": 220,
+        "font": "monospace",
+        "size": 56,
+        "color": "#ffffff"
+      },
+      "subtitle": {
+        "text": "— Phaser NGE —",
+        "x": 640,
+        "y": 280,
+        "font": "monospace",
+        "size": 18,
+        "color": "#666688"
+      },
+      "buttons": [
+        {
+          "id": "start",
+          "label": "▶ Start Game",
+          "x": 640,
+          "y": 420,
+          "font": "monospace",
+          "size": 22,
+          "color": "#00ccff",
+          "hoverColor": "#ffffff"
+        },
+        {
+          "id": "continue",
+          "label": "▶ Continue",
+          "x": 640,
+          "y": 480,
+          "font": "monospace",
+          "size": 18,
+          "color": "#444444",
+          "hoverColor": "#88aa88"
+        },
+        {
+          "id": "settings",
+          "label": "▶ Settings",
+          "x": 640,
+          "y": 540,
+          "font": "monospace",
+          "size": 18,
+          "color": "#888888",
+          "hoverColor": "#ffffff"
+        }
+      ]
+    },
+    "splash": {
+      "enabled": false,
+      "background": "#0a0a1a",
+      "logo": "{\"category\":\"backgrounds\",\"name\":\"throne_00001_.png\"}",
+      "logoScale": 1,
+      "fadeIn": 1000,
+      "hold": 2000,
+      "fadeOut": 1000,
+      "skipOnClick": true
+    }
   }
 }

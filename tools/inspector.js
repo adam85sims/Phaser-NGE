@@ -1,6 +1,6 @@
 import { editorState, markDirty } from './state.js';
 
-const TYPE_LABELS = { dialogue: 'Dialogue', choice: 'Choice', condition: 'Condition', event: 'Event', call_scene: 'Call Scene', wait: 'Wait', end: 'End' };
+const TYPE_LABELS = { dialogue: 'Dialogue', choice: 'Choice', condition: 'Condition', event: 'Event', call_scene: 'Call Scene', wait: 'Wait', end: 'End', set_variable: 'Set Variable', timed_choice: 'Timed Choice', random_branch: 'Random Branch' };
 
 export function renderInspectorContent(container) {
   // Handle layer selection
@@ -84,9 +84,57 @@ export function renderInspectorContent(container) {
       html += `<div class="form-group"><label>Prompt</label><input value="${(node.prompt||'').replace(/</g,'&lt;')}" data-field="prompt"/></div>
         <div class="form-group" style="border-top:1px solid var(--border);padding-top:8px">
         <label>Choices (${(node.choices||[]).length})</label>
-        <div id="choice-list">...</div>
-        <button class="add-btn">+ Add Choice</button></div>`;
+        <div id="choice-list"></div>
+        <button class="add-btn" id="add-choice-btn">+ Add Choice</button></div>`;
       break;
+    case 'timed_choice':
+      html += `<div class="form-row"><div class="form-group"><label>Duration (ms)</label><input type="number" value="${node.duration||5000}" data-field="duration" data-type="number"/></div>
+        <div class="form-group"><label>Default Next</label><select data-field="default_next"><option value="">— none —</option>${nodeOpts}</select></div></div>
+        <div class="form-group"><label>Prompt</label><input value="${(node.prompt||'').replace(/</g,'&lt;')}" data-field="prompt"/></div>
+        <div class="form-group" style="border-top:1px solid var(--border);padding-top:8px">
+        <label>Choices (${(node.choices||[]).length})</label>
+        <div id="choice-list"></div>
+        <button class="add-btn" id="add-choice-btn">+ Add Choice</button></div>`;
+      break;
+    case 'random_branch':
+      html += `<div class="form-group" style="border-top:1px solid var(--border);padding-top:8px">
+        <label>Branches (${(node.choices||[]).length})</label>
+        <div id="choice-list"></div>
+        <button class="add-btn" id="add-choice-btn">+ Add Branch</button></div>`;
+      break;
+    case 'set_variable':
+      html += `<div class="form-group"><label>Variable</label><select data-field="variable">
+        <option value="">— select —</option>${varOpts}</select></div>
+        <div class="form-group"><label>Value</label><input value="${node.value||''}" data-field="value"/></div>
+        <div class="form-group"><label>Operation</label><select data-field="operation">
+          <option value="set"${node.operation==='set'?' selected':''}>Set</option>
+          <option value="add"${node.operation==='add'?' selected':''}>Add</option>
+          <option value="toggle"${node.operation==='toggle'?' selected':''}>Toggle</option>
+        </select></div>
+        <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
+      break;
+    case 'condition':
+      html += `<div class="form-group"><label>Condition Expression</label><input value="${(node.condition||'').replace(/"/g,'&quot;')}" data-field="condition" placeholder="e.g. flag == true"/></div>
+        <div class="form-row">
+          <div class="form-group"><label>True (Next)</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>
+          <div class="form-group"><label>False (Else)</label><select data-field="else"><option value="">— none —</option>${nodeOpts.replace(/data-field="next"/g, 'data-field="else"')}</select></div>
+        </div>`;
+      break;
+    case 'call_scene': {
+      const targetSceneId = node.sceneId;
+      const targetScene = editorState.scenes[targetSceneId];
+      const targetNodes = targetScene?.nodes || [];
+      const nodeOpts2 = targetNodes.map(n => `<option value="${n.id}"${node.nodeId === n.id ? ' selected' : ''}>${n.id}</option>`).join('');
+      html += `
+        <div class="form-group"><label>Target Scene</label><select data-field="sceneId">
+          <option value="">— none —</option>${(editorState.gameConfig?.scenes||[]).map(s => `<option value="${s}"${node.sceneId===s?' selected':''}>${s}</option>`).join('')}
+        </select></div>
+        <div class="form-group"><label>Start Node</label><select data-field="nodeId">
+          <option value="">— entry point —</option>${nodeOpts2}
+        </select></div>
+        <div class="form-group"><label>Next (Return)</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
+      break;
+    }
     case 'event':
       html += `<div class="form-group"><label>Event Type</label><select data-field="eventType">
         <option value="sfx"${node.eventType==='sfx'?' selected':''}>Play SFX</option>
@@ -95,6 +143,51 @@ export function renderInspectorContent(container) {
         <option value="camera_flash"${node.eventType==='camera_flash'?' selected':''}>Camera Flash</option>
         <option value="bg_change"${node.eventType==='bg_change'?' selected':''}>Background</option></select></div>
         <div class="form-group"><label>Value</label><input value="${node.eventValue||''}" data-field="eventValue"/></div>
+        <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
+      break;
+    case 'animate':
+      html += `<div class="form-row"><div class="form-group"><label>Target</label><input value="${node.target||''}" data-field="target"/></div>
+        <div class="form-group"><label>Property</label><select data-field="property">
+          <option value="x"${node.property==='x'?' selected':''}>X Position</option>
+          <option value="y"${node.property==='y'?' selected':''}>Y Position</option>
+          <option value="alpha"${node.property==='alpha'?' selected':''}>Alpha (Opacity)</option>
+          <option value="scale"${node.property==='scale'?' selected':''}>Scale</option>
+          <option value="angle"${node.property==='angle'?' selected':''}>Angle</option>
+          <option value="zoom"${node.property==='zoom'?' selected':''}>Zoom (Camera)</option>
+        </select></div></div>
+        <div class="form-row"><div class="form-group"><label>Value</label><input type="number" value="${node.value||0}" data-field="value" data-type="number"/></div>
+        <div class="form-group"><label>Duration</label><input type="number" value="${node.duration||1000}" data-field="duration" data-type="number"/></div></div>
+        <div class="form-row"><div class="form-group"><label>Easing</label><select data-field="easing">
+          <option value="Linear"${node.easing==='Linear'?' selected':''}>Linear</option>
+          <option value="Sine.easeInOut"${node.easing==='Sine.easeInOut'?' selected':''}>Smooth In/Out</option>
+          <option value="Bounce.easeOut"${node.easing==='Bounce.easeOut'?' selected':''}>Bounce</option>
+        </select></div>
+        <div class="form-group"><label style="margin-top:20px"><input type="checkbox" data-field="wait" ${node.wait?'checked':''}/> Wait for finish</label></div></div>
+        <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
+      break;
+    case 'show_object':
+    case 'hide_object':
+      html += `<div class="form-group"><label>Target (ID)</label><input value="${node.target||''}" data-field="target"/></div>
+        <div class="form-row"><div class="form-group"><label>Fade Duration (ms)</label><input type="number" value="${node.duration||0}" data-field="duration" data-type="number"/></div>
+        <div class="form-group"><label style="margin-top:20px"><input type="checkbox" data-field="wait" ${node.wait?'checked':''}/> Wait for finish</label></div></div>
+        <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
+      break;
+    case 'camera':
+      html += `<div class="form-row"><div class="form-group"><label>Action</label><select data-field="action">
+          <option value="shake"${node.action==='shake'?' selected':''}>Shake</option>
+          <option value="flash"${node.action==='flash'?' selected':''}>Flash</option>
+          <option value="fade_in"${node.action==='fade_in'?' selected':''}>Fade In</option>
+          <option value="fade_out"${node.action==='fade_out'?' selected':''}>Fade Out</option>
+          <option value="zoom"${node.action==='zoom'?' selected':''}>Zoom</option>
+          <option value="pan"${node.action==='pan'?' selected':''}>Pan</option>
+        </select></div>
+        <div class="form-group"><label>Value</label><input value="${node.value||''}" data-field="value" placeholder="e.g. 0.05 or 400,300"/></div></div>
+        <div class="form-row"><div class="form-group"><label>Duration</label><input type="number" value="${node.duration||1000}" data-field="duration" data-type="number"/></div>
+        <div class="form-group"><label style="margin-top:20px"><input type="checkbox" data-field="wait" ${node.wait?'checked':''}/> Wait for finish</label></div></div>
+        <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
+      break;
+    case 'wait':
+      html += `<div class="form-row"><div class="form-group"><label>Duration (ms)</label><input type="number" value="${node.duration||1000}" data-field="duration" data-type="number"/></div></div>
         <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
       break;
     case 'end':
@@ -133,6 +226,63 @@ export function renderInspectorContent(container) {
       window.dispatchEvent(new CustomEvent('editor:render'));
     });
   });
+  // Render choices if applicable
+  const choiceList = container.querySelector('#choice-list');
+  if (choiceList) {
+    const renderChoices = () => {
+      if (!node.choices) node.choices = [];
+      let chtml = '';
+      node.choices.forEach((c, i) => {
+        const isRandom = node.type === 'random_branch';
+        chtml += `<div style="background:var(--bg-elevated);border-radius:4px;padding:6px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:bold">${isRandom ? 'Branch' : 'Choice'} ${i+1}</span>
+            <button class="icon-btn-sm" data-del-choice="${i}" style="color:#ef4444;font-size:10px">✕</button>
+          </div>
+          ${!isRandom ? `<div class="form-group"><input placeholder="Text..." value="${(c.text||'').replace(/</g,'&lt;')}" data-choice-idx="${i}" data-choice-field="text" style="font-size:11px;padding:4px"/></div>` : ''}
+          ${isRandom ? `<div class="form-group"><label>Weight</label><input type="number" value="${c.weight||1}" data-choice-idx="${i}" data-choice-field="weight" style="font-size:11px;padding:4px"/></div>` : ''}
+          ${!isRandom ? `<div class="form-group"><label>Condition</label><input placeholder="e.g. rep > 5" value="${(c.condition||'').replace(/</g,'&lt;')}" data-choice-idx="${i}" data-choice-field="condition" style="font-size:11px;padding:4px"/></div>` : ''}
+          <div class="form-group"><label>Next</label><select data-choice-idx="${i}" data-choice-field="next" style="font-size:11px;padding:4px">
+            <option value="">— none —</option>
+            ${(sceneData?.nodes||[]).filter(n => n.id !== node.id).map(n => `<option value="${n.id}"${c.next===n.id?' selected':''}>${n.id}</option>`).join('')}
+          </select></div>
+        </div>`;
+      });
+      choiceList.innerHTML = chtml;
+      
+      // Bind choice fields
+      choiceList.querySelectorAll('[data-choice-field]').forEach(el => {
+        el.addEventListener('change', (e) => {
+          const idx = parseInt(el.dataset.choiceIdx);
+          let val = e.target.value;
+          if (el.type === 'number') val = Number(val);
+          node.choices[idx][el.dataset.choiceField] = val;
+          markDirty();
+          window.dispatchEvent(new CustomEvent('editor:render'));
+        });
+      });
+
+      // Bind choice delete
+      choiceList.querySelectorAll('[data-del-choice]').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.dataset.delChoice);
+          node.choices.splice(idx, 1);
+          markDirty();
+          renderChoices();
+          window.dispatchEvent(new CustomEvent('editor:render'));
+        });
+      });
+    };
+    renderChoices();
+
+    container.querySelector('#add-choice-btn')?.addEventListener('click', () => {
+      if (!node.choices) node.choices = [];
+      node.choices.push(node.type === 'random_branch' ? { weight: 1, next: '' } : { text: 'New Choice', condition: '', next: '' });
+      markDirty();
+      renderChoices();
+      window.dispatchEvent(new CustomEvent('editor:render'));
+    });
+  }
 }
 
 /* ─── LAYER INSPECTOR ─────────────────────────── */

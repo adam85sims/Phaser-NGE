@@ -36,6 +36,9 @@ export function render(container, app) {
       <div style="display:flex;align-items:center;gap:8px">
         <button class="btn btn-sm" id="btn-create-folder" title="Create Folder">+ 📁</button>
         <button class="btn btn-sm" id="btn-create-file" title="Create File">+ 📄</button>
+        <span style="border-left:1px solid var(--border);height:16px;margin:0 2px"></span>
+        <button class="btn btn-sm" id="btn-expand-all" title="Expand All">▼ Expand</button>
+        <button class="btn btn-sm" id="btn-collapse-all" title="Collapse All">▶ Collapse</button>
         <span class="text-dim" style="font-size:11px" id="breadcrumb">Assets</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -204,11 +207,12 @@ function _renderTree() {
 function _renderTreeNode(node, depth) {
   const isExpanded = _state.expandedFolders.has(node.path);
   const isSelected = _state.selectedFolder === node.path;
-  const icon = node.type === 'folder' ? '📁' : _getFileIcon(node.name);
-  const indent = depth * 12;
+  const icon = node.type === 'folder' ? (isExpanded ? '📂' : '📁') : _getFileIcon(node.name);
+  const indent = depth * 16;
+  const hasChildren = node.type === 'folder' && node.children && node.children.length > 0;
   
-  const childrenHtml = node.type === 'folder' && isExpanded && node.children
-    ? node.children.map(child => _renderTreeNode(child, depth + 1)).join('')
+  const childrenHtml = hasChildren && isExpanded
+    ? `<div class="tree-children" style="margin-left:${indent + 16}px">${node.children.map(child => _renderTreeNode(child, depth + 1)).join('')}</div>`
     : '';
   
   const chevron = node.type === 'folder'
@@ -216,8 +220,8 @@ function _renderTreeNode(node, depth) {
     : '<span style="width:14px;height:14px;display:inline-block;flex-shrink:0"></span>';
   
   return `
-    <div class="tree-item ${isSelected ? 'selected' : ''}" data-path="${node.path}" data-type="${node.type}">
-      <div style="display:flex;align-items:center;gap:4px;padding:6px 8px;border-radius:4px;cursor:pointer">
+    <div class="tree-node">
+      <div class="tree-item ${isSelected ? 'selected' : ''}" data-path="${node.path}" data-type="${node.type}" style="padding-left:${indent}px">
         ${chevron}
         <span style="font-size:13px">${icon}</span>
         <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${node.name}</span>
@@ -367,6 +371,16 @@ function _filterTree(tree) {
   return tree.map(filterNode).filter(Boolean);
 }
 
+function _expandAll(tree) {
+  if (!tree) return;
+  for (const node of tree) {
+    if (node.type === 'folder' && node.children && node.children.length > 0) {
+      _state.expandedFolders.add(node.path);
+      _expandAll(node.children);
+    }
+  }
+}
+
 /* ─── INTERACTIONS ─────────────────────────────── */
 
 function _selectFolder(path) {
@@ -442,6 +456,16 @@ function _bindEvents() {
       _renderFileGrid();
     });
   }
+  
+  // Expand / Collapse all
+  document.getElementById('btn-expand-all')?.addEventListener('click', () => {
+    _expandAll(_state.tree);
+    _renderTree();
+  });
+  document.getElementById('btn-collapse-all')?.addEventListener('click', () => {
+    _state.expandedFolders.clear();
+    _renderTree();
+  });
   
   // Buttons
   document.getElementById('btn-open')?.addEventListener('click', () => {

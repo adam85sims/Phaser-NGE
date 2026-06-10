@@ -142,6 +142,7 @@ describe('SceneController', () => {
       expect(onStart).toHaveBeenCalledWith({
         sceneId: 's1',
         background: null,
+        layers: undefined,
         music: null,
       });
       expect(ctrl.currentNode.id).toBe('start');
@@ -182,6 +183,7 @@ describe('SceneController', () => {
       const scene = makeScene('s1', [makeDialogue('a', 'n', 'x')]);
       scene.background = 'city_night';
       scene.music = 'ambient';
+      scene.layers = [{ type: 'background', asset: 'city_night' }];
       registerScene(scene);
 
       const onStart = callbackSpy();
@@ -191,6 +193,7 @@ describe('SceneController', () => {
       expect(onStart).toHaveBeenCalledWith({
         sceneId: 's1',
         background: 'city_night',
+        layers: [{ type: 'background', asset: 'city_night' }],
         music: 'ambient',
       });
     });
@@ -363,6 +366,7 @@ describe('SceneController', () => {
         zIndex: 0,
         autoAdvance: false,
         waitTime: 0,
+        comment: null,
       });
     });
 
@@ -384,8 +388,113 @@ describe('SceneController', () => {
     it('does NOT auto-advance when autoAdvance is false', () => {
       ctrl.onDialogue = callbackSpy();
       ctrl.showDialogue(makeDialogue('d1', 'n', 'text'));
-
       expect(ctrl._autoTimer).toBeUndefined();
+    });
+
+    it('passes comment field when present on node', () => {
+      const onDia = callbackSpy();
+      ctrl.onDialogue = onDia;
+
+      ctrl.showDialogue(makeDialogue('d1', 'n', 'text', { comment: 'TODO: need art' }));
+
+      expect(onDia).toHaveBeenCalledWith(expect.objectContaining({
+        comment: 'TODO: need art',
+      }));
+    });
+
+    it('passes null comment when node has no comment field', () => {
+      const onDia = callbackSpy();
+      ctrl.onDialogue = onDia;
+
+      ctrl.showDialogue(makeDialogue('d1', 'n', 'text'));
+
+      expect(onDia).toHaveBeenCalledWith(expect.objectContaining({
+        comment: null,
+      }));
+    });
+  });
+
+  /* ── node comments ──────────────────── */
+
+  describe('node comments', () => {
+    it('processes dialogue nodes with comments identically to those without', () => {
+      ctrl.isRunning = true;
+      const onDia = callbackSpy();
+      ctrl.onDialogue = onDia;
+
+      const node = makeDialogue('d1', 'hero', 'Hello', { comment: 'Internal note' });
+      ctrl.processNode(node);
+
+      expect(ctrl.currentNode).toBe(node);
+      expect(onDia).toHaveBeenCalledTimes(1);
+      expect(onDia).toHaveBeenCalledWith(expect.objectContaining({
+        speaker: 'hero',
+        text: 'Hello',
+        comment: 'Internal note',
+      }));
+    });
+
+    it('preserves comment through full scene walk', () => {
+      const scene = makeScene('commented', [
+        makeDialogue('start', 'n', 'First', { next: 'second', comment: 'Act 1 opener' }),
+        makeDialogue('second', 'n', 'Second', { next: 'end' }),
+        makeEnd('end', 'Done'),
+      ]);
+      registerScene(scene);
+
+      const comments = [];
+      ctrl.onDialogue = (d) => comments.push(d.comment);
+
+      ctrl.startScene('commented');
+      ctrl.advance();
+
+      expect(comments).toEqual(['Act 1 opener', null]);
+    });
+
+    it('does not interfere with variable actions on the same node', () => {
+      Data.variables = { score: { type: 'number', default: 0 } };
+      const vs = new VariableSystem();
+      ctrl = new SceneController(vs);
+      ctrl.isRunning = true;
+
+      const node = makeDialogue('d1', 'n', 'msg', {
+        setFlag: 'score', setValue: 42,
+        comment: 'This sets the score'
+      });
+      ctrl.processNode(node);
+
+      expect(vs.get('score')).toBe(42);
+      expect(ctrl.currentNode.comment).toBe('This sets the score');
+    });
+
+    it('choice nodes can carry comments without affecting choice logic', () => {
+      const onChoice = callbackSpy();
+      ctrl.onChoice = onChoice;
+      ctrl.isRunning = true;
+
+      const node = makeChoice('c1', 'Pick', [
+        { text: 'A', next: 'a', comment: 'Brave path' },
+        { text: 'B', next: 'b' },
+      ], { comment: 'Decision point' });
+
+      ctrl.processNode(node);
+
+      expect(onChoice).toHaveBeenCalledTimes(1);
+      const choices = onChoice.mock.calls[0][0].choices;
+      expect(choices[0].text).toBe('A');
+      expect(choices[1].text).toBe('B');
+    });
+
+    it('event nodes with comments fire actions normally', () => {
+      const onAction = callbackSpy();
+      ctrl.onAction = onAction;
+
+      ctrl.fireEvent(makeEvent('e1', 'sfx', 'boom', { comment: 'Big moment' }));
+
+      expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'sfx',
+        value: 'boom',
+      }));
     });
   });
 

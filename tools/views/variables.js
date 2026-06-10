@@ -272,7 +272,8 @@ window.__varExport = () => {
 
 function _markDirty() {
   // Write-through: immediately sync to app.data
-  _app.data.variables = JSON.parse(JSON.stringify(_state.variables));
+  Object.keys(_app.data.variables).forEach(k => delete _app.data.variables[k]);
+  Object.assign(_app.data.variables, JSON.parse(JSON.stringify(_state.variables)));
   _app.stats.varCount = Object.keys(_state.variables).length;
   window.__markProjectDirty?.();
   const el = document.getElementById('var-subtitle');

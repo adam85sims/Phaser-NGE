@@ -2,6 +2,8 @@
  * Assets — Visual asset browser with thumbnail grid, filtering, and drag-to-apply.
  * Browse images and audio with previews, search, and metadata.
  */
+import { backend } from '../shared/backend-adapter.js';
+
 let _app = null;
 let _state = {
   scan: { backgrounds: [], music: [], sfx: [], portraits: [] },
@@ -464,9 +466,7 @@ function _formatDuration(seconds) {
  */
 async function _scanOnDisk() {
   try {
-    const res = await fetch('/api/list-assets');
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await backend.listAssets();
     _state.onDisk = {
       backgrounds: data.backgrounds || [],
       portraits: data.portraits || [],
@@ -754,16 +754,11 @@ window.__assetDrop = async (event) => {
         reader.readAsDataURL(file);
       });
 
-      const res = await fetch('/api/upload-asset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: target.category, filename: target.cleanName, base64 })
-      });
-      if (res.ok) {
+      try {
+        await backend.uploadAsset(target.category, target.cleanName, base64);
         results.push({ name: file.name, category: target.category, cleanName: target.cleanName, ok: true });
-      } else {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        results.push({ name: file.name, category: target.category, cleanName: target.cleanName, ok: false, error: err.error });
+      } catch (err) {
+        results.push({ name: file.name, category: target.category, cleanName: target.cleanName, ok: false, error: err.message });
       }
     } catch (e) {
       results.push({ name: file.name, category: target.category, cleanName: target.cleanName, ok: false, error: e.message });

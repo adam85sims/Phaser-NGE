@@ -2,6 +2,8 @@
  * Scenes — Full scene manager with stats, search, duplicate,
  * delete, rename, set as start scene, and open in editor.
  */
+import { editorState } from '../state.js';
+
 let _app = null;
 let _state = { scenes: [], searchTerm: '', viewMode: 'grid' };
 
@@ -12,29 +14,28 @@ export function render(container, app) {
   _state.scenes = [...(app.stats.recentScenes || [])];
 
   container.innerHTML = `
-    <div class="view-header" style="display:flex;justify-content:space-between;align-items:flex-start">
-      <div>
-        <h1>Scenes</h1>
-        <p id="scene-subtitle">${_state.scenes.length} scene${_state.scenes.length !== 1 ? 's' : ''}</p>
+    <div class="view-toolbar" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-weight:600;font-size:14px">Scenes</span>
+        <span class="text-dim" style="font-size:11px" id="scene-subtitle">${_state.scenes.length} scene${_state.scenes.length !== 1 ? 's' : ''}</span>
       </div>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" onclick="window.__sceneAdd()">+ New Scene</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input id="scene-search" type="text" placeholder="Search scenes..." style="background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:5px 10px;font-size:12px;width:200px" />
+        <span class="text-dim" style="font-size:11px;margin-right:8px" id="scene-count-badge">${_state.scenes.length} total</span>
         <button class="btn btn-sm" onclick="window.__sceneToggleView()">${_state.viewMode === 'grid' ? '⊞ List' : '⊟ Grid'}</button>
+        <button class="btn btn-sm" onclick="window.__sceneAdd()">+ New Scene</button>
       </div>
     </div>
 
-    <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center">
-      <input id="scene-search" type="text" placeholder="Search scenes..." style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:5px 10px;font-size:12px;width:220px;font-family:inherit" />
-      <span class="text-dim" style="font-size:11px" id="scene-count-badge">${_state.scenes.length} total</span>
-    </div>
-
-    <div id="scene-container">
+    <div style="display:flex;flex:1;min-height:400px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;overflow-y:auto;padding:16px;">
+      <div id="scene-container" style="width:100%">
       ${_state.scenes.length === 0
         ? '<div class="text-dim" style="padding:20px;text-align:center">No scenes yet. Create one or add it in Settings.</div>'
         : _state.viewMode === 'grid'
           ? '<div class="scene-grid">' + _state.scenes.map(s => _sceneCard(s)).join('') + '</div>'
           : _renderListTable(_state.scenes)
       }
+      </div>
     </div>
   `;
 
@@ -69,7 +70,7 @@ function _reRenderScenes() {
     : '<table class="data-table">' +
       '<thead><tr><th>Name</th><th>Nodes</th><th>Words</th><th>Choices</th><th></th></tr></thead><tbody>' +
       filtered.map(s => `<tr>
-        <td class="mono clickable" onclick="window.__navigate('dialogue')">${s.id}${_app.data.game?.startScene === s.id ? ' ★' : ''}</td>
+        <td class="mono clickable" onclick="window.__setActiveScene('${s.id}'); window.__navigate('dialogue')">${s.id}${_app.data.game?.startScene === s.id ? ' ★' : ''}</td>
         <td>${s.nodes}</td>
         <td>~${s.words}</td>
         <td>${s.choices}</td>
@@ -83,14 +84,14 @@ function _sceneCard(s) {
   return `
     <div class="scene-card" style="position:relative">
       ${isStart ? '<span style="position:absolute;top:6px;right:8px;font-size:10px;color:var(--success)">★ START</span>' : ''}
-      <div class="scene-name clickable" onclick="window.__navigate('dialogue')">${s.id}</div>
+      <div class="scene-name clickable" onclick="window.__setActiveScene('${s.id}'); window.__navigate('dialogue')">${s.id}</div>
       <div class="scene-meta">
         <span>📄 ${s.nodes} nodes</span>
         <span>💬 ~${s.words} words</span>
         <span>◇ ${s.choices} choices</span>
       </div>
       <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
-        <button class="btn btn-sm" onclick="window.__navigate('dialogue')">✍ Edit</button>
+        <button class="btn btn-sm" onclick="window.__setActiveScene('${s.id}'); window.__navigate('dialogue')">✍ Edit</button>
         ${!isStart ? `<button class="btn btn-sm" onclick="window.__sceneSetStart('${s.id}')">★ Set Start</button>` : ''}
         <button class="btn btn-sm" onclick="window.__sceneDuplicate('${s.id}')">Copy</button>
         <button class="btn btn-sm btn-danger" onclick="window.__sceneDelete('${s.id}')">Delete</button>
@@ -104,7 +105,7 @@ function _renderListTable(scenes) {
   return '<table class="data-table">' +
     '<thead><tr><th>Name</th><th>Nodes</th><th>Words</th><th>Choices</th><th></th></tr></thead><tbody>' +
     scenes.map(s => `<tr>
-      <td class="mono clickable" onclick="window.__navigate('dialogue')">${s.id}${isStart(s.id) ? ' ★' : ''}</td>
+      <td class="mono clickable" onclick="window.__setActiveScene('${s.id}'); window.__navigate('dialogue')">${s.id}${isStart(s.id) ? ' ★' : ''}</td>
       <td>${s.nodes}</td>
       <td>~${s.words}</td>
       <td>${s.choices}</td>
@@ -116,7 +117,7 @@ function _renderListTable(scenes) {
 function _actionButtons(id) {
   const isStart = _app.data.game?.startScene === id;
   return `
-    <button class="btn btn-sm" onclick="window.__navigate('dialogue')" title="Edit">✍</button>
+    <button class="btn btn-sm" onclick="window.__setActiveScene('${id}'); window.__navigate('dialogue')" title="Edit">✍</button>
     ${!isStart ? `<button class="btn btn-sm" onclick="window.__sceneSetStart('${id}')" title="Set as start">★</button>` : ''}
     <button class="btn btn-sm" onclick="window.__sceneDuplicate('${id}')" title="Duplicate">⧉</button>
     <button class="btn btn-sm btn-danger" onclick="window.__sceneDelete('${id}')" title="Delete">✕</button>
@@ -136,15 +137,16 @@ window.__sceneAdd = () => {
   // Register in game config
   if (!_app.data.game.scenes) _app.data.game.scenes = [];
   _app.data.game.scenes.push(id);
-  _app.data.scenes[id] = { data };
+  _app.data.scenes[id] = data;
   _app.stats.recentScenes.push({ id, nodes: 1, words: 2, choices: 0 });
 
   // Refresh settings data too
   _state.scenes = [...(_app.stats.recentScenes || [])];
   _reRenderScenes();
   const el = document.getElementById('scene-subtitle');
-  if (el) el.textContent = `${_state.scenes.length} scenes (place JSON in data/scenes/)`;
+  if (el) el.textContent = `${_state.scenes.length} scenes`;
   window.__markProjectDirty?.();
+  window.dispatchEvent(new CustomEvent('editor:render'));
 };
 
 window.__sceneDuplicate = (id) => {
@@ -158,7 +160,7 @@ window.__sceneDuplicate = (id) => {
   // No auto-download — user exports from editor when ready
 
   _app.data.game.scenes.push(newId);
-  _app.data.scenes[newId] = { data };
+  _app.data.scenes[newId] = data;
   const stats = { id: newId, nodes: data.nodes?.length || 0, words: _countWords(data.nodes), choices: _countChoices(data.nodes) };
   _app.stats.recentScenes.push(stats);
   _state.scenes = [...(_app.stats.recentScenes || [])];
@@ -173,10 +175,22 @@ window.__sceneDelete = (id) => {
   _app.stats.recentScenes = (_app.stats.recentScenes || []).filter(s => s.id !== id);
   if (_app.data.game.startScene === id) _app.data.game.startScene = _app.data.game.scenes[0] || '';
   _state.scenes = [...(_app.stats.recentScenes || [])];
+  // If the deleted scene was active, cleanly switch to the next available scene
+  if (editorState.activeSceneId === id) {
+    editorState.selectedItemId = null;
+    editorState.selectedItemType = null;
+    const nextScene = _app.data.game.scenes[0] || null;
+    if (nextScene && window.__setActiveScene) {
+      window.__setActiveScene(nextScene);
+    } else {
+      editorState.activeSceneId = null;
+    }
+  }
   _reRenderScenes();
   const el = document.getElementById('scene-subtitle');
   if (el) el.textContent = `${_state.scenes.length} scenes`;
   window.__markProjectDirty?.();
+  window.dispatchEvent(new CustomEvent('editor:render'));
 };
 
 window.__sceneSetStart = (id) => {

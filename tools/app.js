@@ -47,6 +47,47 @@ async function boot() {
     renderScenePreview();
     renderOutline(); // refresh layer list
   });
+
+  // Asset Browser Hook
+  window.addEventListener('editor:open-assets', (e) => {
+    editorState.activeWorkspaceTab = 'assets';
+    renderWorkspace();
+    setTimeout(() => {
+      const filter = e.detail?.filter;
+      if (filter) {
+        document.querySelector(`[data-filter="${filter}"]`)?.click();
+      }
+    }, 50);
+  });
+
+  // Play from node hook
+  window.__playFromNode = (nodeId) => {
+    if (editorState.activeSceneId) {
+      forceSave().then(() => {
+        localStorage.setItem('nge_debug_start', JSON.stringify({ sceneId: editorState.activeSceneId, nodeId }));
+        window.open('/', '_blank');
+      });
+    }
+  };
+
+  // Global scene switcher
+  window.__setActiveScene = (sceneId) => {
+    editorState.activeSceneId = sceneId;
+    if (!editorState.expandedScenes) editorState.expandedScenes = new Set();
+    editorState.expandedScenes.add(sceneId);
+    editorState.selectedItemId = null;
+    editorState.selectedItemType = null;
+    renderOutline();
+    renderScenePreview();
+    
+    // Initialize scene composer for this scene
+    import('./views/scene-composer.js').then(mod => {
+      mod.initScene(editorState.activeSceneId);
+    });
+    
+    // Dispatch an event so graph.js can reset camera if needed
+    window.dispatchEvent(new CustomEvent('scene:changed', { detail: sceneId }));
+  };
 }
 
 // ── Render functions ───────────────────────────────────
@@ -60,17 +101,19 @@ function renderOutline() {
 
   scenes.forEach(sceneId => {
     const isSelected = editorState.activeSceneId === sceneId;
+    const isExpanded = editorState.expandedScenes && editorState.expandedScenes.has(sceneId);
     html += `
       <div class="tree-item tree-parent ${isSelected ? 'selected' : ''}" data-scene="${sceneId}">
-        <svg class="tree-chevron" viewBox="0 0 20 20" fill="currentColor" style="transform: ${isSelected ? 'rotate(0)' : 'rotate(-90deg)'}">
+        <svg class="tree-chevron" viewBox="0 0 20 20" fill="currentColor" style="transform: ${isExpanded ? 'rotate(0)' : 'rotate(-90deg)'}; transition: transform 0.2s var(--ease)">
           <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
         </svg>
         <span>${sceneId}</span>
       </div>
     `;
 
-    if (isSelected) {
-      html += `<div class="tree-children">`;
+    if (isExpanded) {
+      const animateClass = editorState.animatingExpansion === sceneId ? 'animate-expand' : '';
+      html += `<div class="tree-children-wrapper ${animateClass}"><div class="tree-children">`;
       const sceneData = editorState.scenes[sceneId];
       
       // NODES section
@@ -111,7 +154,7 @@ function renderOutline() {
         html += `<div class="text-dim" style="font-size:10px;padding:4px 6px;opacity:0.5">No layers — drag assets to scene</div>`;
       }
       
-      html += `</div>`;
+      html += `</div></div>`;
     }
   });
 
@@ -120,16 +163,25 @@ function renderOutline() {
   // Bind outline clicks
   body.querySelectorAll('.tree-parent').forEach(el => {
     el.addEventListener('click', (e) => {
-      editorState.activeSceneId = el.dataset.scene;
-      editorState.selectedItemId = null;
-      editorState.selectedItemType = null;
-      renderOutline();
-      renderScenePreview();
+      const sceneId = el.dataset.scene;
+      if (!editorState.expandedScenes) editorState.expandedScenes = new Set();
       
-      // Initialize scene composer for this scene
-      import('./views/scene-composer.js').then(mod => {
-        mod.initScene(editorState.activeSceneId);
-      });
+      if (editorState.activeSceneId === sceneId) {
+        // Toggle expansion if already active
+        const isExpanding = !editorState.expandedScenes.has(sceneId);
+        if (isExpanding) {
+          editorState.expandedScenes.add(sceneId);
+        } else {
+          editorState.expandedScenes.delete(sceneId);
+        }
+        if (isExpanding) editorState.animatingExpansion = sceneId;
+        renderOutline();
+        editorState.animatingExpansion = null;
+      } else {
+        editorState.animatingExpansion = sceneId;
+        window.__setActiveScene(sceneId);
+        editorState.animatingExpansion = null;
+      }
     });
   });
 
@@ -222,6 +274,7 @@ function renderWorkspace() {
     const viewMap = {
       'files': () => import('./views/files.js'),
       'assets': () => import('./views/assets.js'),
+      'scenes': () => import('./views/scenes.js'),
       'characters': () => import('./views/characters.js'),
       'variables': () => import('./views/variables.js')
     };
@@ -230,6 +283,17 @@ function renderWorkspace() {
     if (viewLoader) {
       viewLoader().then(module => {
         // Build app context from editorState
+        const recentScenes = Object.keys(editorState.scenes).map(id => {
+          const scene = editorState.scenes[id];
+          const nodes = scene?.nodes || [];
+          return {
+            id,
+            nodes: nodes.length,
+            words: _countWords(nodes),
+            choices: _countChoices(nodes)
+          };
+        });
+
         const appContext = {
           data: {
             game: editorState.gameConfig,
@@ -242,7 +306,7 @@ function renderWorkspace() {
             nodeCount: editorState.stats.nodeCount,
             charCount: Object.keys(editorState.characters).length,
             varCount: Object.keys(editorState.variableDefs).length,
-            recentScenes: Object.keys(editorState.scenes)
+            recentScenes
           }
         };
         
@@ -615,6 +679,7 @@ document.querySelectorAll('.workspace-tab').forEach(function (tab) {
     const name = tab.textContent.toLowerCase();
     if (name.includes('dialogue')) editorState.activeWorkspaceTab = 'dialogue';
     else if (name.includes('files')) editorState.activeWorkspaceTab = 'files';
+    else if (name.includes('scenes')) editorState.activeWorkspaceTab = 'scenes';
     else if (name.includes('characters')) editorState.activeWorkspaceTab = 'characters';
     else if (name.includes('variables')) editorState.activeWorkspaceTab = 'variables';
     else if (name.includes('asset')) editorState.activeWorkspaceTab = 'assets';
@@ -637,6 +702,10 @@ modeButtons.forEach(function (btn) {
     const sceneView = document.getElementById('scene-view');
     if (mode === 'script') {
       _renderScriptMode(sceneView);
+    } else if (mode === 'menu') {
+      _renderMenuMode(sceneView);
+    } else if (mode === 'splash') {
+      _renderSplashMode(sceneView);
     } else {
       _renderSceneMode(sceneView);
     }
@@ -678,6 +747,24 @@ async function _renderScriptMode(container) {
   }
 }
 
+let _menuEditorModule = null;
+async function _renderMenuMode(container) {
+  if (!container) return;
+  container.innerHTML = `<div id="menu-editor-container" style="height:100%;display:flex;flex-direction:column;position:relative"></div>`;
+  if (!_menuEditorModule) _menuEditorModule = await import('./views/menu-editor.js');
+  if (_menuEditorModule.init) _menuEditorModule.init({ data: editorState });
+  _menuEditorModule.render(document.getElementById('menu-editor-container'), { data: editorState });
+}
+
+let _splashEditorModule = null;
+async function _renderSplashMode(container) {
+  if (!container) return;
+  container.innerHTML = `<div id="splash-editor-container" style="height:100%;display:flex;flex-direction:column;position:relative"></div>`;
+  if (!_splashEditorModule) _splashEditorModule = await import('./views/splash-editor.js');
+  if (_splashEditorModule.init) _splashEditorModule.init({ data: editorState });
+  _splashEditorModule.render(document.getElementById('splash-editor-container'), { data: editorState });
+}
+
 function _renderSceneMode(container) {
   if (!container) return;
   
@@ -717,6 +804,19 @@ function _renderSceneMode(container) {
   
   // Render scene preview with background
   renderScenePreview();
+}
+
+function _countWords(nodes) {
+  let c = 0;
+  for (const n of nodes || []) {
+    if (n.text) c += n.text.split(/\s+/).filter(Boolean).length;
+    if (n.choices) for (const ch of n.choices) if (ch.text) c += ch.text.split(/\s+/).filter(Boolean).length;
+  }
+  return c;
+}
+
+function _countChoices(nodes) {
+  return (nodes || []).reduce((s, n) => s + (n.choices?.length || 0), 0);
 }
 
 boot();
