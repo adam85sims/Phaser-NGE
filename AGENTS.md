@@ -197,7 +197,7 @@ AND has higher precedence than OR. Parens override. Values: booleans, numbers, o
 
 ### Boot & Data Loading
 - `BootScene.create()` is `async`. It uses `fetch()` with **absolute paths** (`/data/...`) — Phaser's built-in `this.load.json` has Vite path-resolution issues, do NOT use it.
-- Check for `localStorage.getItem('nge_editor_data')` first (editor "Save to Game" / Export writes here). If present, uses that and only fetches `theme.json` separately. Falls back to disk files otherwise.
+- Always loads from disk. The V2 editor saves to disk via `/api/save`. The legacy `nge_editor_data` localStorage path has been removed — do NOT re-add it.
 - Scenes are loaded **dynamically** by iterating `Data.game.scenes[]` and fetching each `/data/scenes/<id>.json`.
 - Background images are prefetched as blobs, converted via `createImageBitmap`, and added as textures under key `bg_<key>`.
 
@@ -223,7 +223,7 @@ AND has higher precedence than OR. Parens override. Values: booleans, numbers, o
 - Values typed as boolean / number / string. JSON `null` becomes `null` (treats as falsy in `==`/`!=`).
 
 ### SaveSystem
-- localStorage key `nge_save_<slot>`. Slot 0 = quick, slot 9 = auto (saved on every `onSceneStart`).
+- localStorage key `narrative_saves` (a JSON array, one entry per slot index). Slot 0 = quick save, slot 9 = auto-save (written on every `onSceneStart`).
 - `quickLoad()` returns `{ sceneId, nodeId, variables, timestamp }` or `null`. GameScene re-calls `sceneCtrl.startScene(loaded.sceneId, loaded.nodeId)` and rehydrates variables.
 
 ### Theme

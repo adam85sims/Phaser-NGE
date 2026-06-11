@@ -41,6 +41,15 @@ Generates procedural textures used by the game:
 
 If any fetch fails, the loading text changes to `"LOAD ERROR: {message}"` in red and logs to console. The game doesn't transition.
 
+### Audio Preloading
+
+After scenes are populated, `BootScene` walks every scene and registers audio files with the Phaser loader:
+
+- `scene.music` (legacy scene-level BGM)
+- `event` nodes with `eventType: 'bgm'` or `'sfx'` and a non-empty `eventValue`
+
+Each unique key is HEAD-probed at `/assets/audio/{bgm,sfx}/<key>.<ext>` for `mp3, ogg, wav, opus, m4a` (in order), and the first match is registered via `this.load.audio()`. The Phaser loader is then started and awaited before the scene transitions out — so by the time `GameScene` mounts, every referenced audio file is in `scene.cache.audio` and `AudioSystem.playBGM/playSFX` will find them. Missing files emit a `console.warn` but do not block boot.
+
 ## Procedural Textures
 
 Generated in `preload()`:

@@ -8,29 +8,45 @@
       "id": "start",
       "type": "dialogue",
       "speaker": "narrator",
-      "text": "This text should persist after clicking away!",
-      "x": -460,
-      "y": -100,
-      "next": "node_2"
+      "text": "This is Dave.",
+      "x": -920,
+      "y": -160,
+      "next": "bgIntro"
     },
     {
-      "id": "node_2",
+      "id": "dialogue_1",
+      "type": "dialogue",
+      "x": -700,
+      "y": -80,
+      "speaker": "narrator",
+      "text": "Dave is about to have a very very bad day.",
+      "next": ""
+    },
+    {
+      "id": "show_object_1",
+      "type": "show_object",
+      "x": -920,
+      "y": -80,
+      "target": "Elena_neutral_00001_",
+      "next": "dialogue_1",
+      "wait": "on"
+    },
+    {
+      "id": "bgIntro",
+      "type": "event",
+      "x": -700,
+      "y": -160,
+      "eventType": "bgm",
+      "eventValue": "bgm_imacomposernow",
+      "next": "wait_1"
+    },
+    {
+      "id": "wait_1",
       "type": "wait",
-      "text": "New node. This is a test.",
-      "x": -140,
-      "y": -40,
-      "choices": [],
-      "prompt": "",
-      "next": "end_1",
-      "duration": 1000
-    },
-    {
-      "id": "end_1",
-      "type": "end",
-      "x": 140,
-      "y": -40,
-      "text": "",
-      "nextScene": "test_scene"
+      "x": -480,
+      "y": -160,
+      "duration": 10000,
+      "next": "show_object_1"
     }
   ],
   "layers": [

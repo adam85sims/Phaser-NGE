@@ -5,7 +5,7 @@ description: "BGM and SFX manager with graceful fallback when audio files don't 
 
 # AudioSystem
 
-> Simple audio manager for background music and sound effects. Handles cache checks gracefully — if a sound key doesn't exist in the Phaser audio cache, the operation is silently skipped rather than throwing. No preloading required beyond standard Phaser asset loading.
+> Simple audio manager for background music and sound effects. Handles cache checks gracefully — if a sound key doesn't exist in the Phaser audio cache, the operation is silently skipped (with a one-time `console.warn`) rather than throwing. Audio files are auto-preloaded by `BootScene` based on scene graph references.
 
 **Source:** `src/systems/AudioSystem.js`
 **Related skills:** `../game-scene/SKILL.md`
@@ -45,8 +45,8 @@ Stops and cleans up the BGM channel. Called on scene shutdown.
 
 ## Gotchas
 
-- **Cache existence check** — `playBGM()` and `playSFX()` check `this.scene.cache.audio.exists(key)` before attempting to play. If the key doesn't exist, the operation is silently skipped. This prevents console errors during development when audio assets aren't loaded.
+- **Cache existence check** — `playBGM()` and `playSFX()` check `this.scene.cache.audio.exists(key)` before attempting to play. If the key doesn't exist, the operation is skipped and a one-time `console.warn` is emitted (deduped per missing key). This prevents console errors during development when audio assets aren't loaded.
 - **Duplicate BGM prevention** — `playBGM()` checks if the same key is already playing on `bgmChannel` and returns early. To force a restart of the current track, call `stopBGM()` first.
 - **Mute is all-or-nothing** — `toggleMute()` affects both BGM and SFX. There's no per-channel mute.
 - **Volume range** — values are 0.0 to 1.0. No clamping is performed.
-- **No audio preloading** — AudioSystem assumes audio files have been loaded into the Phaser cache by the scenes's `preload()` or via the Loader. If no files are loaded, all play attempts silently fail.
+- **Audio preloading is automatic** — `BootScene` walks every scene and registers `eventType: 'bgm'` / `'sfx'` event values (and legacy `scene.music`) with the Phaser loader via `this.load.audio(key, url)`. Files are looked up in `public/assets/audio/bgm/` and `public/assets/audio/sfx/` with extensions probed in order: `mp3, ogg, wav, opus, m4a`. Drop a file matching the filename stem and it Just Works — no manifest to update.

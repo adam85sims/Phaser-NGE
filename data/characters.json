@@ -1,6 +1,14 @@
 {
-  "narrator": {
-    "name": null,
+  "Dave": {
+    "name": "Dave",
     "color": "#ffffff"
+  },
+  "narrator": {
+    "name": "Narrator",
+    "color": "#00ccff",
+    "portraits": {
+      "neutral": "Marcus_stern_00001_.png"
+    },
+    "defaultExpression": "neutral"
   }
 }

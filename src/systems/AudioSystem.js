@@ -15,6 +15,10 @@ export class AudioSystem {
 
     // Track active tween so we can cancel mid-crossfade
     this._fadeTween = null;
+
+    // Remember which missing keys we've already warned about so a scene
+    // that fires the same bad event 20 times doesn't spam the console.
+    this._warnedKeys = new Set();
   }
 
   /**
@@ -34,7 +38,10 @@ export class AudioSystem {
       this._fadeTween = null;
     }
 
-    if (!this.scene.cache.audio.exists(key)) return;
+    if (!this.scene.cache.audio.exists(key)) {
+      this._warnMissing('bgm', key);
+      return;
+    }
 
     // Create the new track (start at volume 0 for fade-in / crossfade)
     const newChannel = this.scene.sound.add(key, { loop: true, volume: 0 });
@@ -114,7 +121,19 @@ export class AudioSystem {
     if (!key || this.muted) return;
     if (this.scene.cache.audio.exists(key)) {
       this.scene.sound.play(key, { volume: this.sfxVolume });
+    } else {
+      this._warnMissing('sfx', key);
     }
+  }
+
+  _warnMissing(type, key) {
+    if (this._warnedKeys.has(`${type}:${key}`)) return;
+    this._warnedKeys.add(`${type}:${key}`);
+    console.warn(
+      `[AudioSystem] ${type.toUpperCase()} key '${key}' not in audio cache. ` +
+      `Place the file in public/assets/audio/${type === 'bgm' ? 'bgm' : 'sfx'}/ ` +
+      `and reference it by filename stem.`
+    );
   }
 
   setBGMVolume(v) {

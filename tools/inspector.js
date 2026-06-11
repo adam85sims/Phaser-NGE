@@ -1,4 +1,5 @@
 import { editorState, markDirty } from './state.js';
+import { backend } from './shared/backend-adapter.js';
 
 const TYPE_LABELS = { dialogue: 'Dialogue', choice: 'Choice', condition: 'Condition', event: 'Event', call_scene: 'Call Scene', wait: 'Wait', end: 'End', set_variable: 'Set Variable', timed_choice: 'Timed Choice', random_branch: 'Random Branch' };
 
@@ -135,16 +136,64 @@ export function renderInspectorContent(container) {
         <div class="form-group"><label>Next (Return)</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
       break;
     }
-    case 'event':
-      html += `<div class="form-group"><label>Event Type</label><select data-field="eventType">
-        <option value="sfx"${node.eventType==='sfx'?' selected':''}>Play SFX</option>
-        <option value="bgm"${node.eventType==='bgm'?' selected':''}>Play BGM</option>
-        <option value="camera_shake"${node.eventType==='camera_shake'?' selected':''}>Camera Shake</option>
-        <option value="camera_flash"${node.eventType==='camera_flash'?' selected':''}>Camera Flash</option>
-        <option value="bg_change"${node.eventType==='bg_change'?' selected':''}>Background</option></select></div>
-        <div class="form-group"><label>Value</label><input value="${node.eventValue||''}" data-field="eventValue"/></div>
+    case 'event': {
+      const evType = node.eventType || 'bgm';
+      const isBGM  = evType === 'bgm';
+      const isSFX  = evType === 'sfx';
+      const isBG   = evType === 'bg_change';
+      const isStop = evType === 'bgm_stop';
+      const isCam  = evType === 'camera_shake' || evType === 'camera_flash';
+
+      // Volume field for audio events
+      const volVal = node.eventVolume != null ? node.eventVolume : 1.0;
+      const volRow = (isBGM || isSFX) ? `
+        <div class="form-group">
+          <label>Volume</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="range" min="0" max="1" step="0.05" value="${volVal}" data-field="eventVolume" data-type="number" style="flex:1" />
+            <span id="ev-vol-label" style="font-size:11px;width:30px;text-align:right">${Math.round(volVal*100)}%</span>
+          </div>
+        </div>` : '';
+
+      // Camera value hint
+      const camPlaceholder = evType === 'camera_shake' ? 'duration,intensity e.g. 500,0.01' : 'r,g,b e.g. 255,255,255';
+
+      html += `
+        <div class="form-group"><label>Event Type</label><select data-field="eventType" id="ev-type-select">
+          <option value="bgm"${isBGM?' selected':''}>🎵 Play BGM</option>
+          <option value="bgm_stop"${isStop?' selected':''}>⏹ Stop BGM</option>
+          <option value="sfx"${isSFX?' selected':''}>🔊 Play SFX</option>
+          <option value="bg_change"${isBG?' selected':''}>🖼️ Change Background</option>
+          <option value="camera_shake"${evType==='camera_shake'?' selected':''}>📳 Camera Shake</option>
+          <option value="camera_flash"${evType==='camera_flash'?' selected':''}>✨ Camera Flash</option>
+        </select></div>
+
+        <div id="ev-value-section">
+          ${(isBGM || isSFX) ? `
+            <div class="form-group">
+              <label>${isBGM ? 'BGM Track' : 'SFX Clip'}</label>
+              <select data-field="eventValue" id="ev-asset-select">
+                <option value="${node.eventValue||''}">${node.eventValue || '— loading… —'}</option>
+              </select>
+            </div>
+            ${volRow}` : ''}
+          ${isBG ? `
+            <div class="form-group">
+              <label>Background</label>
+              <select data-field="eventValue" id="ev-asset-select">
+                <option value="${node.eventValue||''}">${node.eventValue || '— loading… —'}</option>
+              </select>
+            </div>` : ''}
+          ${isCam ? `
+            <div class="form-group">
+              <label>Value</label>
+              <input value="${node.eventValue||''}" data-field="eventValue" placeholder="${camPlaceholder}" />
+            </div>` : ''}
+        </div>
+
         <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>`;
       break;
+    }
     case 'animate':
       html += `<div class="form-row"><div class="form-group"><label>Target</label><input value="${node.target||''}" data-field="target"/></div>
         <div class="form-group"><label>Property</label><select data-field="property">
@@ -282,6 +331,68 @@ export function renderInspectorContent(container) {
       renderChoices();
       window.dispatchEvent(new CustomEvent('editor:render'));
     });
+  }
+
+  // ── Event node: async asset hydration ───────────────────────────
+  if (node.type === 'event') {
+    // Live volume label
+    const volRange = container.querySelector('input[data-field="eventVolume"]');
+    const volLabel = container.querySelector('#ev-vol-label');
+    if (volRange && volLabel) {
+      volRange.addEventListener('input', () => {
+        volLabel.textContent = `${Math.round(volRange.value * 100)}%`;
+        node.eventVolume = Number(volRange.value);
+        markDirty();
+      });
+    }
+
+    // When event type changes: re-render inspector to show appropriate value fields
+    const evTypeSelect = container.querySelector('#ev-type-select');
+    if (evTypeSelect) {
+      evTypeSelect.addEventListener('change', () => {
+        node.eventType = evTypeSelect.value;
+        node.eventValue = '';
+        markDirty();
+        // Full re-render so the value section updates
+        window.dispatchEvent(new CustomEvent('inspector:refresh'));
+      });
+    }
+
+    // Hydrate asset dropdown from backend
+    const assetSelect = container.querySelector('#ev-asset-select');
+    if (assetSelect) {
+      backend.listAssets().then(assets => {
+        const evType = node.eventType || 'bgm';
+        let items = [];
+        if (evType === 'bgm')      items = (assets.music      || []).map(f => f.name.replace(/\.[^.]+$/, ''));
+        else if (evType === 'sfx') items = (assets.sfx        || []).map(f => f.name.replace(/\.[^.]+$/, ''));
+        else if (evType === 'bg_change') items = (assets.backgrounds || []).map(f => f.name.replace(/\.[^.]+$/, ''));
+
+        const current = node.eventValue || '';
+        assetSelect.innerHTML = `<option value="">— select —</option>` +
+          items.map(k => `<option value="${k}"${k === current ? ' selected' : ''}>${k}</option>`).join('');
+
+        // Re-bind change since we replaced innerHTML
+        assetSelect.addEventListener('change', () => {
+          node.eventValue = assetSelect.value;
+          markDirty();
+          window.dispatchEvent(new CustomEvent('editor:render'));
+        });
+      }).catch(() => {
+        // If asset listing fails, fall back to a plain text input
+        if (assetSelect.parentElement) {
+          const fallback = document.createElement('input');
+          fallback.value = node.eventValue || '';
+          fallback.dataset.field = 'eventValue';
+          fallback.placeholder = 'Enter asset key…';
+          fallback.addEventListener('change', () => {
+            node.eventValue = fallback.value;
+            markDirty();
+          });
+          assetSelect.replaceWith(fallback);
+        }
+      });
+    }
   }
 }
 

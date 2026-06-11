@@ -22,6 +22,7 @@ export class SceneController {
     // Callbacks — set by GameScene
     this.onDialogue = null;     // fn({ speaker, text, expression })
     this.onChoice = null;       // fn({ prompt, choices[] })
+    this.onChoiceTimeout = null; // fn() — called when timed choice expires
     this.onSceneEnd = null;     // fn({ text, nextScene })
     this.onAction = null;       // fn({ type, ... })
     this.onSceneStart = null;   // fn({ sceneId, background, music })
@@ -90,8 +91,9 @@ export class SceneController {
     // Apply any variable actions attached to this node
     this.vars.applyAction(node);
 
-    // Any node can trigger a background change via a `background` field
-    if (node.background !== undefined && this.onBackgroundChange) {
+    // Any node can trigger a background change via a `background` field.
+    // Guard is truthy — background: null must NOT clear the screen mid-scene.
+    if (node.background && this.onBackgroundChange) {
       this.onBackgroundChange(node.background);
     }
 
@@ -424,7 +426,8 @@ export class SceneController {
       this._choiceTimer = this.scene.time.addEvent({
         delay: node.duration || 5000,
         callback: () => {
-          this.scene.dialogue.hideChoices();
+          // Route through the callback layer rather than accessing scene.dialogue directly
+          if (this.onChoiceTimeout) this.onChoiceTimeout();
           this._choiceTimer = null;
           this.isRunning = true;
           this.jumpToId(node.default_next || node.next);
@@ -510,6 +513,7 @@ export class SceneController {
       this.onAction({
         type: node.eventType || 'sfx',
         value: node.eventValue || null,
+        volume: node.eventVolume != null ? node.eventVolume : null,
         setFlag: node.setFlag,
         setValue: node.setValue,
         toggleFlag: node.toggleFlag,

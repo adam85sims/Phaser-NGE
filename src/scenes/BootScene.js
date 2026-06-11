@@ -3,12 +3,10 @@ import { Data } from '../systems/DataLoader.js';
 import { Settings } from '../systems/SettingsSystem.js';
 
 /**
- * BootScene — loads all game data JSON files using fetch()
- * (avoids Phaser's built-in loader which can have path issues with Vite).
- * Generates procedural textures. Transitions to GameScene when ready.
- *
- * Checks localStorage for editor-saved data first (from the dialogue editor's
- * "Save to Game" / Export button). If available, uses that instead of disk files.
+ * BootScene — loads all game data JSON files using fetch() from disk.
+ * (Avoids Phaser's built-in loader which has path issues with Vite.)
+ * Generates procedural textures. Preloads audio and background images.
+ * Transitions to SplashScene → MenuScene → GameScene when ready.
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -30,74 +28,48 @@ export class BootScene extends Phaser.Scene {
       // Load persistent settings
       Settings.load();
 
-      let loadedFromStorage = false;
+      // Load from disk (V2 editor saves to disk via /api/save)
+      const t = Date.now();
+      const safeFetchJson = async (url) => {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`${url}: ${r.status}`);
+        const text = await r.text();
+        if (text.trim().startsWith('<')) throw new Error(`${url} returned HTML (file likely missing)`);
+        return JSON.parse(text);
+      };
 
-      // Check for editor-saved data in localStorage (from dialogue editor Export)
-      const editorDataRaw = localStorage.getItem('nge_editor_data');
-      if (editorDataRaw) {
-        try {
-          const editorData = JSON.parse(editorDataRaw);
-          Data.game = editorData.game || null;
-          Data.characters = editorData.characters || null;
-          Data.variables = editorData.variables || null;
-          Data.scenes = editorData.scenes || {};
-          // Theme still needs to be fetched (editor doesn't touch theme.json)
-          try {
-            const themeResp = await fetch('/data/theme.json');
-            if (themeResp.ok) Data.theme = await themeResp.json();
-          } catch { Data.theme = null; }
+      const [game, characters, variables, theme] = await Promise.all([
+        safeFetchJson(`/data/game.json?t=${t}`),
+        safeFetchJson(`/data/characters.json?t=${t}`),
+        safeFetchJson(`/data/variables.json?t=${t}`),
+        safeFetchJson(`/data/theme.json?t=${t}`).catch(() => ({})) // theme is optional
+      ]);
 
-          if (Data.game) loadedFromStorage = true;
-        } catch(e) {
-          console.warn('BootScene: corrupt editor data in localStorage, falling back to disk', e);
-          localStorage.removeItem('nge_editor_data');
-        }
-      }
+      // Step 2: Fetch all scenes listed in game.json
+      const sceneIds = game.scenes || [];
+      const t2 = Date.now();
+      const sceneFetches = sceneIds.map(id =>
+        fetch(`/data/scenes/${id}.json?t=${t2}`)
+          .then(async r => {
+            if (!r.ok) return null;
+            const text = await r.text();
+            if (text.trim().startsWith('<')) return null;
+            try { return JSON.parse(text); } catch (e) { return null; }
+          })
+          .then(data => ({ id, data }))
+      );
 
-      if (!loadedFromStorage) {
-        // Fallback: load from disk (standalone / no editor data)
-        const t = Date.now();
-        const safeFetchJson = async (url) => {
-          const r = await fetch(url);
-          if (!r.ok) throw new Error(`${url}: ${r.status}`);
-          const text = await r.text();
-          if (text.trim().startsWith('<')) throw new Error(`${url} returned HTML (file likely missing)`);
-          return JSON.parse(text);
-        };
+      const sceneResults = await Promise.all(sceneFetches);
 
-        const [game, characters, variables, theme] = await Promise.all([
-          safeFetchJson(`/data/game.json?t=${t}`),
-          safeFetchJson(`/data/characters.json?t=${t}`),
-          safeFetchJson(`/data/variables.json?t=${t}`),
-          safeFetchJson(`/data/theme.json?t=${t}`).catch(() => ({})) // theme is optional
-        ]);
-
-        // Step 2: Fetch all scenes listed in game.json
-        const sceneIds = game.scenes || [];
-        const t2 = Date.now();
-        const sceneFetches = sceneIds.map(id =>
-          fetch(`/data/scenes/${id}.json?t=${t2}`)
-            .then(async r => {
-              if (!r.ok) return null;
-              const text = await r.text();
-              if (text.trim().startsWith('<')) return null;
-              try { return JSON.parse(text); } catch (e) { return null; }
-            })
-            .then(data => ({ id, data }))
-        );
-
-        const sceneResults = await Promise.all(sceneFetches);
-
-        // Populate Data store
-        Data.game = game;
-        Data.characters = characters;
-        Data.variables = variables;
-        Data.theme = theme;
-        Data.scenes = {};
-        sceneResults.forEach(({ id, data }) => {
-          if (data) Data.scenes[id] = data;
-        });
-      }
+      // Populate Data store
+      Data.game = game;
+      Data.characters = characters;
+      Data.variables = variables;
+      Data.theme = theme;
+      Data.scenes = {};
+      sceneResults.forEach(({ id, data }) => {
+        if (data) Data.scenes[id] = data;
+      });
 
       // Preload background images referenced by scenes (and legacy background field)
       const bgKeys = new Set();
@@ -140,6 +112,55 @@ export class BootScene extends Phaser.Scene {
         bgResults.filter(Boolean).forEach(({ key, bitmap }) => {
           this.textures.addImage(`bg_${key}`, bitmap);
         });
+      }
+
+      // Preload BGM/SFX audio files referenced by scenes so AudioSystem
+      // can find them in scene.cache.audio. Discovery covers:
+      //   - scene.music           (legacy scene-level BGM)
+      //   - event nodes with eventType 'bgm' / 'sfx'  (per-node triggers)
+      // We HEAD-probe common formats and register the first one that 200s,
+      // so a single missing format extension doesn't 404 four times.
+      const audioRefs = new Set();
+      Object.values(Data.scenes).forEach(scene => {
+        if (scene.music) audioRefs.add(`bgm|${scene.music}`);
+        (scene.nodes || []).forEach(node => {
+          if (node.type !== 'event' || !node.eventValue) return;
+          if (node.eventType === 'bgm') audioRefs.add(`bgm|${node.eventValue}`);
+          else if (node.eventType === 'sfx') audioRefs.add(`sfx|${node.eventValue}`);
+        });
+      });
+
+      if (audioRefs.size > 0) {
+        const probe = async (url) => {
+          try {
+            const r = await fetch(url, { method: 'HEAD' });
+            return r.ok;
+          } catch { return false; }
+        };
+        const registerAudio = async (type, key) => {
+          const subdir = type === 'bgm' ? 'bgm' : 'sfx';
+          for (const ext of ['mp3', 'ogg', 'wav', 'opus', 'm4a']) {
+            const url = `/assets/audio/${subdir}/${key}.${ext}`;
+            if (await probe(url)) {
+              this.load.audio(key, url);
+              return true;
+            }
+          }
+          console.warn(`AudioSystem preload: ${type} '${key}' not found in public/assets/audio/${subdir}/`);
+          return false;
+        };
+        await Promise.all([...audioRefs].map(ref => {
+          const [type, key] = ref.split('|');
+          return registerAudio(type, key);
+        }));
+
+        // Kick the Phaser loader and wait for it to finish before transitioning.
+        if (this.load.totalToLoad > 0) {
+          await new Promise((resolve) => {
+            this.load.once('complete', resolve);
+            this.load.start();
+          });
+        }
       }
 
       loadText.destroy();

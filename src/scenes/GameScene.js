@@ -112,11 +112,35 @@ export class GameScene extends Phaser.Scene {
     ctrl.onAction = (data) => {
       // Handle event nodes
       switch (data.type) {
-        case 'sfx':
-          this.audio.playSFX(data.value);
+        case 'sfx': {
+          const playWithVol = () => {
+            if (data.volume != null) {
+              const prev = this.audio.sfxVolume;
+              this.audio.sfxVolume = Math.max(0, Math.min(1, data.volume));
+              this.audio.playSFX(data.value);
+              this.audio.sfxVolume = prev;
+            } else {
+              this.audio.playSFX(data.value);
+            }
+          };
+          if (!this.cache.audio.exists(data.value)) {
+            this._loadAndPlay('sfx', data.value, playWithVol);
+          } else {
+            playWithVol();
+          }
           break;
-        case 'bgm':
-          this.audio.playBGM(data.value);
+        }
+        case 'bgm': {
+          if (data.volume != null) this.audio.setBGMVolume(Math.max(0, Math.min(1, data.volume)));
+          if (!this.cache.audio.exists(data.value)) {
+            this._loadAndPlay('bgm', data.value, () => this.audio.playBGM(data.value));
+          } else {
+            this.audio.playBGM(data.value);
+          }
+          break;
+        }
+        case 'bgm_stop':
+          this.audio.stopBGM(800);
           break;
         case 'bg_change':
           // Legacy support: re-load the single layer
@@ -131,8 +155,10 @@ export class GameScene extends Phaser.Scene {
           break;
       }
 
-      // Show a small toast notification for events
-      if (data.type && data.type !== 'camera_flash') {
+      // Show a small toast notification for visible events only.
+      // Audio events (bgm, sfx, bgm_stop) are silent — no on-screen indicator needed.
+      const _silentEventTypes = new Set(['bgm', 'sfx', 'bgm_stop']);
+      if (data.type && data.type !== 'camera_flash' && !_silentEventTypes.has(data.type)) {
         const toast = this.add.text(this.W / 2, this.H - 60, `⚡ ${data.type}${data.value ? ': ' + data.value : ''}`, {
           fontSize: '12px',
           fontFamily: 'monospace',
@@ -155,6 +181,10 @@ export class GameScene extends Phaser.Scene {
     ctrl.onWait = (data) => {
       // Show a brief "..." indicator
       this.dialogue.setVisible(false);
+    };
+
+    ctrl.onChoiceTimeout = () => {
+      this.dialogue.hideChoices();
     };
 
     ctrl.onBackgroundChange = (key) => {
@@ -180,15 +210,16 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // F1–F4: jump to test scenes
-    this.input.keyboard.on('keydown-F1', () => {
-      this._switchScene('sample');
-    });
-    this.input.keyboard.on('keydown-F2', () => {
-      this._switchScene('test-conditions');
-    });
-    this.input.keyboard.on('keydown-F3', () => {
-      this._switchScene('test-events');
+    // F1–F3: jump to dev/test scenes (only if they exist in loaded data)
+    const devSceneHotkeys = { F1: 'sample', F2: 'test-conditions', F3: 'test-events' };
+    Object.entries(devSceneHotkeys).forEach(([key, sceneId]) => {
+      this.input.keyboard.on(`keydown-${key}`, () => {
+        if (Data.getScene(sceneId)) {
+          this._switchScene(sceneId);
+        } else {
+          this._showToast(`Dev scene '${sceneId}' not loaded`);
+        }
+      });
     });
 
     // Escape: return to menu
@@ -299,6 +330,36 @@ export class GameScene extends Phaser.Scene {
       delay: 600,
       onComplete: () => toast.destroy(),
     });
+  }
+
+  /**
+   * Runtime audio fallback — probe extensions, load on-the-fly, then play.
+   * Used when a bgm/sfx key fires but isn't in the Phaser audio cache.
+   * @param {'bgm'|'sfx'} type
+   * @param {string} key
+   * @param {Function} onReady - called once the audio is in cache
+   */
+  _loadAndPlay(type, key, onReady) {
+    const subdir = type === 'bgm' ? 'bgm' : 'sfx';
+    const exts = ['mp3', 'ogg', 'wav', 'opus', 'm4a'];
+
+    const tryLoad = async () => {
+      for (const ext of exts) {
+        const url = `/assets/audio/${subdir}/${key}.${ext}`;
+        try {
+          const r = await fetch(url, { method: 'HEAD' });
+          if (!r.ok) continue;
+          // Register and start loader
+          this.load.audio(key, url);
+          this.load.once('complete', () => onReady());
+          this.load.start();
+          return;
+        } catch { continue; }
+      }
+      console.warn(`[GameScene] _loadAndPlay: could not find audio '${key}' in /assets/audio/${subdir}/`);
+    };
+
+    tryLoad();
   }
 
   /* ── CLEANUP ───────────────────────────────── */

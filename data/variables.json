@@ -1,1 +1,26 @@
-{}
+{
+  "time_left": {
+    "type": "number",
+    "default": "120",
+    "description": "We shouldn't need a default here?",
+    "min": 0,
+    "max": 120
+  },
+  "chaos_points": {
+    "type": "number",
+    "default": "0",
+    "description": "Min/Max isn't really needed here.",
+    "min": 0,
+    "max": 100
+  },
+  "path_flags": {
+    "type": "number",
+    "default": false,
+    "description": "Witten as a number here - but it should probably be an array that we add to/collect along the way."
+  },
+  "inventory": {
+    "type": "string",
+    "default": false,
+    "description": "again - should probably be an array?"
+  }
+}

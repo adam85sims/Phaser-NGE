@@ -7,7 +7,6 @@ Features identified during the VN UX review but deferred to focus on core improv
 - **Jump / Call Scene node** — jump to another scene mid-graph (not just from end nodes)
 
 ## Audio
-- **Music fade in/out** — smooth audio transitions instead of instant stop/start
 - **Voice acting** — `.ogg` clips attached to dialogue nodes
 
 ## Content & Extras

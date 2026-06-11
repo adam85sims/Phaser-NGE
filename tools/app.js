@@ -26,6 +26,11 @@ async function boot() {
     // Don't re-render workspace, as it would destroy the canvas
   });
 
+  // inspector:refresh re-renders just the inspector (e.g. event type change swaps value fields)
+  window.addEventListener('inspector:refresh', () => {
+    renderInspector();
+  });
+
   window.addEventListener('editor:dirty', () => {
     document.body.dataset.dirty = 'true';
     const btnSave = document.getElementById('btn-save');
