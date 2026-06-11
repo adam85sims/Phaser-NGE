@@ -78,6 +78,9 @@
       </div>
     </aside>
 
+    <!-- ─── VERTICAL RESIZE HANDLE (outline ↔ scene) ─── -->
+    <div class="resizer resizer-v" data-resize="outline"></div>
+
     <!-- ─── CENTER: Scene canvas + toolbar ─── -->
     <main id="scene-view">
       <div id="canvas-area">
@@ -116,6 +119,9 @@
         </div>
       </div>
     </main>
+
+    <!-- ─── VERTICAL RESIZE HANDLE (scene ↔ inspector) ─── -->
+    <div class="resizer resizer-v" data-resize="inspector"></div>
 
     <!-- ─── RIGHT: Inspector ─── -->
     <aside id="inspector">
@@ -206,6 +212,9 @@
       </div>
     </aside>
   </div>
+
+  <!-- ─── HORIZONTAL RESIZE HANDLE (main ↔ workspace) ─── -->
+  <div class="resizer resizer-h" data-resize="workspace"></div>
 
   <!-- ═══════════════════════════════════════════════
        BOTTOM WORKSPACE — tabbed multi-tool

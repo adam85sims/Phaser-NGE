@@ -53,6 +53,9 @@ async function boot() {
     renderOutline(); // refresh layer list
   });
 
+  // Init panel resize handles
+  initResizers();
+
   // Asset Browser Hook
   window.addEventListener('editor:open-assets', (e) => {
     editorState.activeWorkspaceTab = 'assets';
@@ -822,6 +825,69 @@ function _countWords(nodes) {
 
 function _countChoices(nodes) {
   return (nodes || []).reduce((s, n) => s + (n.choices?.length || 0), 0);
+}
+
+// ── Panel resize logic ──────────────────────────────────
+function initResizers() {
+  document.querySelectorAll('.resizer').forEach(resizer => {
+    resizer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const type = resizer.dataset.resize;  // 'outline', 'inspector', 'workspace'
+      const isHorizontal = type === 'workspace';
+      const startPos = isHorizontal ? e.clientY : e.clientX;
+      const root = document.documentElement;
+
+      // Read starting size from CSS custom property
+      const propMap = {
+        outline:   '--sidebar-w',
+        inspector: '--inspector-w',
+        workspace: '--workspace-h'
+      };
+      const prop = propMap[type];
+      const startSize = parseInt(getComputedStyle(root).getPropertyValue(prop)) || 0;
+
+      // Min/max in px
+      const bounds = {
+        outline:   [120, 600],
+        inspector: [120, 600],
+        workspace: [60, window.innerHeight - 80]
+      };
+      const [minSize, maxSize] = bounds[type];
+
+      resizer.classList.add('active');
+      document.body.style.cursor = isHorizontal ? 'row-resize' : 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const onMove = (ev) => {
+        const curPos = isHorizontal ? ev.clientY : ev.clientX;
+        const delta = curPos - startPos;
+
+        let newSize;
+        if (type === 'outline') {
+          newSize = startSize + delta;
+        } else if (type === 'inspector') {
+          newSize = startSize - delta;
+        } else {
+          // workspace: drag down shrinks it
+          newSize = startSize - delta;
+        }
+
+        newSize = Math.max(minSize, Math.min(maxSize, newSize));
+        root.style.setProperty(prop, newSize + 'px');
+      };
+
+      const onUp = () => {
+        resizer.classList.remove('active');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
 }
 
 boot();

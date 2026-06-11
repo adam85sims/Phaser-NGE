@@ -186,6 +186,38 @@ body[data-dirty="true"] #inspector {
 .icon-btn-sm:hover { color: var(--text); }
 
 /* ══════════════════════════════════════════
+   RESIZE HANDLES
+   ══════════════════════════════════════════ */
+.resizer {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 30;
+  transition: background 0.1s;
+}
+.resizer:hover,
+.resizer.active {
+  background: var(--accent);
+}
+.resizer-v {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+}
+.resizer-v:hover,
+.resizer-v.active {
+  background: var(--accent);
+}
+.resizer-h {
+  height: 4px;
+  cursor: row-resize;
+  background: transparent;
+}
+.resizer-h:hover,
+.resizer-h.active {
+  background: var(--accent);
+}
+
+/* ══════════════════════════════════════════
    MAIN LAYOUT (sidebar | scene | inspector)
    ══════════════════════════════════════════ */
 #main {

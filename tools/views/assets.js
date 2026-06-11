@@ -388,7 +388,7 @@ function _toggleAudioPlay(path, btn) {
   
   // If no button provided, just play without UI update
   if (!btn) {
-    const audio = new Audio(path);
+    let audio = new Audio(path);
     audio.play();
     audio.onended = () => { audio = null; };
     return;
