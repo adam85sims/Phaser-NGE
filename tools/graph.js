@@ -20,13 +20,15 @@ export function mountGraph(container) {
   ctx = canvas.getContext('2d');
   
   const resizeCanvas = () => {
+    if (!canvas.parentElement) return;
     const rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
   };
   
   resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+  const observer = new ResizeObserver(resizeCanvas);
+  observer.observe(canvas.parentElement);
 
   canvas.addEventListener('mousedown', onPointerDown);
   canvas.addEventListener('mousemove', onPointerMove);

@@ -10,16 +10,16 @@
       "speaker": "narrator",
       "text": "This is Dave.",
       "x": -920,
-      "y": -160,
+      "y": -180,
       "next": "bgIntro"
     },
     {
       "id": "dialogue_1",
       "type": "dialogue",
-      "x": -700,
+      "x": -680,
       "y": -80,
       "speaker": "narrator",
-      "text": "Dave is about to have a very very bad day.",
+      "text": "Dave is about to have a very very bad day. [show:dave_fullbody_00001_]",
       "next": ""
     },
     {
@@ -37,7 +37,7 @@
       "x": -700,
       "y": -160,
       "eventType": "bgm",
-      "eventValue": "bgm_imacomposernow",
+      "eventValue": "audio/bgm/bgm_imacomposernow",
       "next": "wait_1"
     },
     {
@@ -51,14 +51,14 @@
   ],
   "layers": [
     {
-      "id": "bg_1781070390164",
-      "type": "background",
-      "asset": "BG_lakeside_00001_",
+      "id": "layer_1781268842093_680",
+      "asset": "backgrounds/BG_village_00001_.png",
       "x": 0,
       "y": 0,
       "scale": 1,
-      "zIndex": 0,
-      "opacity": 1
+      "zIndex": 1,
+      "opacity": 1,
+      "hidden": false
     }
   ]
 }

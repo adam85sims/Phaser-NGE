@@ -71,27 +71,35 @@ export class BootScene extends Phaser.Scene {
         if (data) Data.scenes[id] = data;
       });
 
-      // Preload background images referenced by scenes (and legacy background field)
-      const bgKeys = new Set();
+      // Preload image assets referenced by scenes and characters
+      const imageKeys = new Set();
       Object.values(Data.scenes).forEach(scene => {
-        if (scene.background) bgKeys.add(scene.background);
+        if (scene.background) imageKeys.add(scene.background);
         if (scene.layers) {
           scene.layers.forEach(layer => {
-            if (layer.type === 'background' && layer.asset) {
-              bgKeys.add(layer.asset);
-            }
+            if (layer.asset) imageKeys.add(layer.asset);
           });
         }
       });
 
-      if (Data.theme?.ui?.splash?.logo) bgKeys.add(Data.theme.ui.splash.logo);
-      if (Data.theme?.ui?.menu?.background) bgKeys.add(Data.theme.ui.menu.background);
+      Object.values(Data.characters).forEach(char => {
+        if (char.portraits) {
+          Object.values(char.portraits).forEach(path => {
+            if (path) imageKeys.add(path);
+          });
+        }
+      });
 
-      if (bgKeys.size > 0) {
-        const bgFetches = [...bgKeys].map(key =>
-          fetch(`/assets/backgrounds/${key}.png`)
+      if (Data.theme?.ui?.splash?.logo) imageKeys.add(Data.theme.ui.splash.logo);
+      if (Data.theme?.ui?.menu?.background) imageKeys.add(Data.theme.ui.menu.background);
+
+      if (imageKeys.size > 0) {
+        const imageFetches = [...imageKeys].map(key => {
+          // If no extension, assume .png
+          const urlPath = key.includes('.') ? key : `${key}.png`;
+          return fetch(`/assets/${urlPath}`)
             .then(r => {
-              if (!r.ok) throw new Error(`${key}.png: ${r.status}`);
+              if (!r.ok) throw new Error(`${urlPath}: ${r.status}`);
               return r.blob();
             })
             .then(blob => {
@@ -103,30 +111,27 @@ export class BootScene extends Phaser.Scene {
               });
             })
             .catch(err => {
-              console.warn(`Background image not found: ${key} (${err.message})`);
+              console.warn(`Image not found: ${urlPath} (${err.message})`);
               return null;
-            })
-        );
+            });
+        });
 
-        const bgResults = await Promise.all(bgFetches);
-        bgResults.filter(Boolean).forEach(({ key, bitmap }) => {
-          this.textures.addImage(`bg_${key}`, bitmap);
+        const imageResults = await Promise.all(imageFetches);
+        imageResults.filter(Boolean).forEach(({ key, bitmap }) => {
+          // Cache directly under the path key
+          this.textures.addImage(key, bitmap);
         });
       }
 
       // Preload BGM/SFX audio files referenced by scenes so AudioSystem
-      // can find them in scene.cache.audio. Discovery covers:
-      //   - scene.music           (legacy scene-level BGM)
-      //   - event nodes with eventType 'bgm' / 'sfx'  (per-node triggers)
-      // We HEAD-probe common formats and register the first one that 200s,
-      // so a single missing format extension doesn't 404 four times.
+      // can find them in scene.cache.audio.
       const audioRefs = new Set();
       Object.values(Data.scenes).forEach(scene => {
-        if (scene.music) audioRefs.add(`bgm|${scene.music}`);
+        if (scene.music) audioRefs.add(scene.music);
         (scene.nodes || []).forEach(node => {
           if (node.type !== 'event' || !node.eventValue) return;
-          if (node.eventType === 'bgm') audioRefs.add(`bgm|${node.eventValue}`);
-          else if (node.eventType === 'sfx') audioRefs.add(`sfx|${node.eventValue}`);
+          if (node.eventType === 'bgm') audioRefs.add(node.eventValue);
+          else if (node.eventType === 'sfx') audioRefs.add(node.eventValue);
         });
       });
 
@@ -137,22 +142,24 @@ export class BootScene extends Phaser.Scene {
             return r.ok;
           } catch { return false; }
         };
-        const registerAudio = async (type, key) => {
-          const subdir = type === 'bgm' ? 'bgm' : 'sfx';
+        const registerAudio = async (key) => {
+          // If it has an extension, fetch directly
+          if (key.includes('.')) {
+            this.load.audio(key, `/assets/${key}`);
+            return true;
+          }
+          // Legacy format fallback: probe extensions
           for (const ext of ['mp3', 'ogg', 'wav', 'opus', 'm4a']) {
-            const url = `/assets/audio/${subdir}/${key}.${ext}`;
+            const url = `/assets/${key}.${ext}`;
             if (await probe(url)) {
               this.load.audio(key, url);
               return true;
             }
           }
-          console.warn(`AudioSystem preload: ${type} '${key}' not found in public/assets/audio/${subdir}/`);
+          console.warn(`AudioSystem preload: '${key}' not found.`);
           return false;
         };
-        await Promise.all([...audioRefs].map(ref => {
-          const [type, key] = ref.split('|');
-          return registerAudio(type, key);
-        }));
+        await Promise.all([...audioRefs].map(ref => registerAudio(ref)));
 
         // Kick the Phaser loader and wait for it to finish before transitioning.
         if (this.load.totalToLoad > 0) {

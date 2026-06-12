@@ -147,8 +147,27 @@ export class DialogueSystem {
       this.nameplate.setVisible(false);
     }
 
+    // Extract tags
+    this._tags = [];
+    let cleanText = '';
+    let match;
+    const regex = /\[(show|hide):([^\]]+)\]/gi;
+    let lastIdx = 0;
+    const strText = text || '';
+    
+    while ((match = regex.exec(strText)) !== null) {
+      cleanText += strText.slice(lastIdx, match.index);
+      this._tags.push({
+        index: cleanText.length,
+        action: match[1].toLowerCase(),
+        target: match[2].trim()
+      });
+      lastIdx = regex.lastIndex;
+    }
+    cleanText += strText.slice(lastIdx);
+
     // Start typewriter
-    this._fullText = text || '';
+    this._fullText = cleanText;
     this._displayedText = '';
     this._charIndex = 0;
     this._isTyping = true;
@@ -161,6 +180,15 @@ export class DialogueSystem {
   }
 
   _typeNextChar() {
+    // Check if any tags trigger at the current charIndex
+    while (this._tags.length > 0 && this._tags[0].index === this._charIndex) {
+      const tag = this._tags.shift();
+      if (this.scene && this.scene.layers) {
+        if (tag.action === 'show') this.scene.layers.showLayerByAsset(tag.target, 300);
+        else if (tag.action === 'hide') this.scene.layers.hideLayerByAsset(tag.target, 300);
+      }
+    }
+
     if (this._charIndex >= this._fullText.length) {
       this._isTyping = false;
       this.continueArrow.setAlpha(1);
@@ -189,6 +217,16 @@ export class DialogueSystem {
   skipToEnd() {
     if (!this._isTyping) return;
     if (this._timer) this._timer.remove();
+
+    // Execute all remaining tags instantly
+    while (this._tags.length > 0) {
+      const tag = this._tags.shift();
+      if (this.scene && this.scene.layers) {
+        if (tag.action === 'show') this.scene.layers.showLayerByAsset(tag.target);
+        else if (tag.action === 'hide') this.scene.layers.hideLayerByAsset(tag.target);
+      }
+    }
+
     this._charIndex = this._fullText.length;
     this._displayedText = this._fullText;
     this.text.setText(this._fullText);

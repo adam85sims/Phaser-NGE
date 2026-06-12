@@ -104,114 +104,73 @@ function renderOutline() {
   const body = document.querySelector('#outline .panel-body');
   if (!body) return;
 
-  const scenes = editorState.gameConfig?.scenes || [];
+  const sceneId = editorState.activeSceneId;
   let html = '';
 
-  scenes.forEach(sceneId => {
-    const isSelected = editorState.activeSceneId === sceneId;
-    const isExpanded = editorState.expandedScenes && editorState.expandedScenes.has(sceneId);
-    html += `
-      <div class="tree-item tree-parent ${isSelected ? 'selected' : ''}" data-scene="${sceneId}">
-        <svg class="tree-chevron" viewBox="0 0 20 20" fill="currentColor" style="transform: ${isExpanded ? 'rotate(0)' : 'rotate(-90deg)'}; transition: transform 0.2s var(--ease)">
-          <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
-        </svg>
-        <span>${sceneId}</span>
-      </div>
-    `;
+  if (!sceneId) {
+    body.innerHTML = `<div class="text-dim" style="font-size:10px;padding:8px 6px;">No scene selected</div>`;
+    return;
+  }
 
-    if (isExpanded) {
-      const animateClass = editorState.animatingExpansion === sceneId ? 'animate-expand' : '';
-      html += `<div class="tree-children-wrapper ${animateClass}"><div class="tree-children">`;
-      const sceneData = editorState.scenes[sceneId];
-      
-      // NODES section
-      html += `
-        <div class="outline-section-header" style="display:flex;align-items:center;gap:4px;padding:4px 6px;margin-top:4px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
-          <span>📝 Nodes</span>
-        </div>
-      `;
-      
-      if (sceneData && sceneData.nodes) {
-        sceneData.nodes.forEach(node => {
-          const nodeSelected = editorState.selectedItemId === node.id && editorState.selectedItemType === 'node';
-          html += `<div class="tree-item ${nodeSelected ? 'selected' : ''}" data-node="${node.id}" data-type="node">
-            <span style="color:var(--text-dim);font-size:9px;width:14px">${node.type.substring(0,1).toUpperCase()}</span>
-            <span style="font-size:11px">${node.id}</span>
-          </div>`;
-        });
-      }
-      
-      // LAYERS section
-      html += `
-        <div class="outline-section-header" style="display:flex;align-items:center;gap:4px;padding:4px 6px;margin-top:4px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
-          <span>🎨 Layers</span>
-          <button class="icon-btn-sm" data-add-layer="background" title="Add Background" style="margin-left:auto;padding:2px 4px">+</button>
-        </div>
-      `;
-      
-      if (sceneData && sceneData.layers) {
-        sceneData.layers.forEach(layer => {
-          const layerSelected = editorState.selectedItemId === layer.id && editorState.selectedItemType === 'layer';
-          const icon = layer.type === 'background' ? '🖼️' : layer.type === 'character' ? '👤' : '📦';
-          html += `<div class="tree-item ${layerSelected ? 'selected' : ''}" data-layer="${layer.id}" data-type="layer">
-            <span style="color:var(--text-dim);font-size:9px;width:14px">${icon}</span>
-            <span style="font-size:11px">${layer.asset || layer.characterId || layer.id}</span>
-          </div>`;
-        });
-      } else {
-        html += `<div class="text-dim" style="font-size:10px;padding:4px 6px;opacity:0.5">No layers — drag assets to scene</div>`;
-      }
-      
-      html += `</div></div>`;
-    }
-  });
+  // Scene header
+  html += `
+    <div class="outline-section-header" style="display:flex;align-items:center;gap:4px;padding:6px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-bright);background:var(--bg-elevated);border-bottom:1px solid var(--border);">
+      <span>🎬 ${sceneId}</span>
+    </div>
+  `;
+
+  // OBJECTS section (formerly Layers)
+  html += `
+    <div class="outline-section-header" style="display:flex;align-items:center;gap:4px;padding:4px 6px;margin-top:4px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border);">
+      <span>🎨 Objects</span>
+      <button class="icon-btn-sm" data-add-layer="background" title="Add Background" style="margin-left:auto;padding:2px 4px">+</button>
+    </div>
+  `;
+
+  const sceneData = editorState.scenes[sceneId];
+  if (sceneData && sceneData.layers && sceneData.layers.length > 0) {
+    sceneData.layers.forEach(layer => {
+      const layerSelected = editorState.selectedItemId === layer.id && editorState.selectedItemType === 'layer';
+      const icon = layer.type === 'background' ? '🖼️' : layer.type === 'character' ? '👤' : '📦';
+      const eyeIcon = layer.hidden ? '👁️‍🗨️' : '👁️';
+      const opacity = layer.hidden ? '0.5' : '1';
+      html += `<div class="tree-item ${layerSelected ? 'selected' : ''}" data-layer="${layer.id}" data-type="layer" style="opacity:${opacity}; padding-right: 4px;">
+        <span style="color:var(--text-dim);font-size:9px;width:14px">${icon}</span>
+        <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;">${layer.asset || layer.characterId || layer.id}</span>
+        <button class="icon-btn-sm toggle-visibility" data-toggle-visibility="${layer.id}" title="Toggle Visibility" style="padding:0 4px;background:none;border:none;cursor:pointer;">${eyeIcon}</button>
+      </div>`;
+    });
+  } else {
+    html += `<div class="text-dim" style="font-size:10px;padding:8px 6px;opacity:0.5">No objects — drag assets to scene</div>`;
+  }
 
   body.innerHTML = html;
-
-  // Bind outline clicks
-  body.querySelectorAll('.tree-parent').forEach(el => {
-    el.addEventListener('click', (e) => {
-      const sceneId = el.dataset.scene;
-      if (!editorState.expandedScenes) editorState.expandedScenes = new Set();
-      
-      if (editorState.activeSceneId === sceneId) {
-        // Toggle expansion if already active
-        const isExpanding = !editorState.expandedScenes.has(sceneId);
-        if (isExpanding) {
-          editorState.expandedScenes.add(sceneId);
-        } else {
-          editorState.expandedScenes.delete(sceneId);
-        }
-        if (isExpanding) editorState.animatingExpansion = sceneId;
-        renderOutline();
-        editorState.animatingExpansion = null;
-      } else {
-        editorState.animatingExpansion = sceneId;
-        window.__setActiveScene(sceneId);
-        editorState.animatingExpansion = null;
-      }
-    });
-  });
-
-  // Node clicks
-  body.querySelectorAll('.tree-item[data-type="node"]').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      editorState.selectedItemId = el.dataset.node;
-      editorState.selectedItemType = 'node';
-      renderOutline();
-      renderInspector();
-    });
-  });
 
   // Layer clicks
   body.querySelectorAll('.tree-item[data-type="layer"]').forEach(el => {
     el.addEventListener('click', (e) => {
+      // ignore click if it was on the eye icon
+      if (e.target.closest('.toggle-visibility')) return;
       e.stopPropagation();
       editorState.selectedItemId = el.dataset.layer;
       editorState.selectedItemType = 'layer';
       renderOutline();
       renderInspector();
+    });
+  });
+
+  // Visibility toggle clicks
+  body.querySelectorAll('.toggle-visibility').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const layerId = el.dataset.toggleVisibility;
+      const layer = sceneData.layers.find(l => l.id === layerId);
+      if (layer) {
+        layer.hidden = !layer.hidden;
+        markDirty();
+        renderOutline();
+        renderScenePreview();
+      }
     });
   });
 
@@ -349,12 +308,13 @@ function renderScenePreview() {
   if (!canvasArea) return;
 
   const sceneData = editorState.scenes[editorState.activeSceneId];
-  const bgLayer = sceneData?.layers?.find(l => l.type === 'background');
-  const bgKey = bgLayer?.asset;
-  const bgOpacity = bgLayer?.opacity ?? 1;
-  const bgX = bgLayer?.x ?? 0;
-  const bgY = bgLayer?.y ?? 0;
-  const bgScale = bgLayer?.scale ?? 1;
+  // Layers are ordered by zIndex ascending → lower z paints first (behind), higher z paints last (in front).
+  // Every layer with an `asset` is rendered as an absolutely-positioned image div. The `type` field is
+  // preserved in data for future use (anchor-to-speaker, expression binding, etc.) but the preview
+  // renderer is type-agnostic — all layers behave like image layers.
+  const layers = (sceneData?.layers || [])
+    .slice()
+    .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 
   const VW = editorState.viewportWidth || 1280;
   const VH = editorState.viewportHeight || 720;
@@ -366,10 +326,20 @@ function renderScenePreview() {
   const camLeft = Math.round((VW - GA) / 2);
   const camTop = Math.round((VH - GB) / 2);
 
-  // Build background style
-  const bgStyle = bgKey 
-    ? `background: #111; background-image: url(/assets/backgrounds/${bgKey}.png), url(/assets/backgrounds/${bgKey}.jpg); background-size: cover; background-position: center; transform: translate(${bgX}px, ${bgY}px) scale(${bgScale}); transform-origin: top left;`
-    : 'background: #1a1a2e;';
+  // Build a stack of layer divs. Each layer paints full-viewport, transformed by its own x/y/scale
+  // and stacked via CSS z-index.
+  const layerHTML = layers.map(layer => {
+    if (!layer.asset) return '';
+    const x = layer.x ?? 0;
+    const y = layer.y ?? 0;
+    const scale = layer.scale ?? 1;
+    const opacity = layer.hidden ? 0 : (layer.opacity ?? 1);
+    const z = layer.zIndex ?? 0;
+    const displayStyle = layer.hidden ? 'display:none;' : '';
+    return `<img src="/assets/${layer.asset}" onerror="this.style.display='none'" data-layer-id="${layer.id}" style="position:absolute;left:0;top:0;opacity:${opacity};${displayStyle}z-index:${z};transform:translate(${x}px,${y}px) scale(${scale});transform-origin:top left;pointer-events:none;" />`;
+  }).join('');
+
+  const layerCount = layers.filter(l => l.asset).length;
 
   // ── Ruler ticks with pan/zoom ──
   const { previewPanX, previewPanY, previewZoom } = editorState;
@@ -461,10 +431,9 @@ function renderScenePreview() {
       <div id="canvas-transform" style="transform-origin:0 0;transform:translate(${previewPanX * previewZoom}px, ${previewPanY * previewZoom}px) scale(${previewZoom})">
         <!-- Scene viewport canvas -->
         <div id="scene-viewport" style="width:${VW}px;height:${VH}px;position:relative;background:#111;overflow:hidden">
-          <!-- Background layer -->
-          <div style="position:absolute;left:0;top:0;width:${VW}px;height:${VH}px;opacity:${bgOpacity};${bgStyle}"></div>
+          ${layerHTML}
 
-          ${bgKey ? '' : '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px;pointer-events:none">🎬 <span style="margin-top:8px">Drop a background here</span></div>'}
+          ${layerCount === 0 ? '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px;pointer-events:none">🎬 <span style="margin-top:8px">Drop assets here</span></div>' : ''}
 
           ${dialogueHTML}
 
@@ -484,7 +453,7 @@ function renderScenePreview() {
 
           <!-- Scene info overlay -->
           <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;pointer-events:none;z-index:30">
-            ${bgKey ? `<span>🎨 ${bgKey}</span>` : ''}
+            <span>🎨 ${layerCount} layer${layerCount === 1 ? '' : 's'}</span>
             <span>📄 ${sceneData?.nodes?.length || 0} nodes</span>
           </div>
 
@@ -532,14 +501,17 @@ function renderScenePreview() {
       if (!dragDataStr) dragDataStr = e.dataTransfer.getData('text/plain');
       try {
         const dragData = JSON.parse(dragDataStr || '{}');
-        if (dragData.category === 'backgrounds' && dragData.name) {
-          const key = dragData.name.replace(/\.[^.]+$/, '');
+        // Scene canvas accepts any image drop.
+        if (dragData.type === 'image' && dragData.path) {
           import('./views/scene-composer.js').then(mod => {
-            const layer = mod.handleAssetDrop('backgrounds', key);
+            const layer = mod.handleAssetDrop(dragData.path);
             if (layer) {
+              editorState.selectedItemId = layer.id;
+              editorState.selectedItemType = 'layer';
               markDirty();
               renderScenePreview();
               renderOutline();
+              renderInspector();
             }
           });
         }

@@ -695,8 +695,12 @@ describe('SceneController', () => {
       expect(onAction).toHaveBeenCalledWith({
         type: 'sfx',
         value: 'explosion',
+        volume: null,
+        addFlag: undefined,
+        delta: undefined,
         setFlag: undefined,
         setValue: undefined,
+        toggleFlag: undefined,
       });
     });
 

@@ -130,9 +130,8 @@ export class AudioSystem {
     if (this._warnedKeys.has(`${type}:${key}`)) return;
     this._warnedKeys.add(`${type}:${key}`);
     console.warn(
-      `[AudioSystem] ${type.toUpperCase()} key '${key}' not in audio cache. ` +
-      `Place the file in public/assets/audio/${type === 'bgm' ? 'bgm' : 'sfx'}/ ` +
-      `and reference it by filename stem.`
+      `[AudioSystem] Audio key '${key}' not in audio cache. ` +
+      `Check if the file exists and is preloaded.`
     );
   }
 

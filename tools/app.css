@@ -592,6 +592,9 @@ body[data-dirty="true"] #inspector {
   flex: 1;
   position: relative;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .workspace-body::-webkit-scrollbar { width: 8px; height: 8px; }
 .workspace-body::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }

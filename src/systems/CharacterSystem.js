@@ -28,11 +28,11 @@ export class CharacterSystem {
       this.portraits[characterId].destroy();
     }
 
-    // Check if we have a portrait texture loaded
-    // If not, generate a colored placeholder
-    const texKey = `portrait_${characterId}_${expression || 'neutral'}`;
+    const expressionKey = expression || charData.defaultExpression || 'neutral';
+    const texKey = charData.portraits && charData.portraits[expressionKey] ? charData.portraits[expressionKey] : `portrait_${characterId}_${expressionKey}`;
+    
     if (!this.scene.textures.exists(texKey)) {
-      this._generatePlaceholder(characterId, expression || 'neutral', charData.color || '#ffffff');
+      this._generatePlaceholder(characterId, expressionKey, charData.color || '#ffffff', texKey);
     }
 
     const x = this._getPositionX(position || 'center');
@@ -73,8 +73,7 @@ export class CharacterSystem {
   }
 
   /** Generate a colored circle as a placeholder portrait */
-  _generatePlaceholder(characterId, expression, color) {
-    const key = `portrait_${characterId}_${expression}`;
+  _generatePlaceholder(characterId, expression, color, key) {
     const size = 64;
 
     const canvas = this.scene.textures.createCanvas(key, size, size);

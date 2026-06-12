@@ -57,24 +57,31 @@ function _saveLayers() {
 }
 
 /**
- * Add a background layer from asset key.
+ * Add an image layer from an asset path (relative to /assets/).
  */
-export function addBackground(assetKey) {
+export function addImageLayer(assetPath, opts = {}) {
+  const maxZ = _layers.reduce((m, l) => Math.max(m, l.zIndex ?? 0), 0);
   const layer = {
-    id: `bg_${Date.now()}`,
-    type: 'background',
-    asset: assetKey,
-    x: 0,
-    y: 0,
-    scale: 1,
-    zIndex: 0,
-    opacity: 1
+    id: `layer_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    asset: assetPath,
+    x: opts.x ?? 0,
+    y: opts.y ?? 0,
+    scale: opts.scale ?? 1,
+    zIndex: opts.zIndex ?? (maxZ + 1),
+    opacity: opts.opacity ?? 1
   };
-  
+
   _layers.push(layer);
   _saveLayers();
-  
+
   return layer;
+}
+
+/**
+ * Legacy narrow add — used by menu-editor
+ */
+export function addBackground(assetPath) {
+  return addImageLayer(assetPath);
 }
 
 /**
@@ -114,17 +121,10 @@ export function getLayer(layerId) {
 }
 
 /**
- * Handle asset drop on scene canvas.
+ * Handle asset drop on scene canvas. Expects a relative path from the new free-form asset browser.
  */
-export function handleAssetDrop(category, assetKey) {
-  if (category === 'backgrounds') {
-    const layer = addBackground(assetKey);
-    return layer;
-  }
-  
-  // Future: handle character portraits, props, etc.
-  console.log('Dropped asset:', category, assetKey);
-  return null;
+export function handleAssetDrop(assetPath) {
+  return addImageLayer(assetPath);
 }
 
 /**

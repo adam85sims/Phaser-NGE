@@ -18,33 +18,33 @@ export default function editorBackend(options = {}) {
           if (req.url === '/api/list-assets') {
             try {
               const baseDir = path.join(projectRoot, 'public', 'assets');
-              const result = {};
-
-              const dirs = {
-                backgrounds: 'backgrounds',
-                portraits: 'characters',
-                music: 'audio/bgm',
-                sfx: 'audio/sfx',
-                fonts: 'fonts'
-              };
-
-              for (const [key, dirName] of Object.entries(dirs)) {
-                const dirPath = path.join(baseDir, dirName);
-                console.log('[list-assets] scanning:', dirPath);
+              
+              async function scanDirRecursive(dirPath) {
+                let results = [];
                 try {
-                  const files = await fs.readdir(dirPath);
-                  console.log('[list-assets]', key, 'found:', files);
-                  const validExts = /\.(png|jpg|jpeg|gif|webp|mp3|ogg|wav|ttf|otf|woff2?)$/i;
-                  result[key] = files.filter(f => validExts.test(f)).map(f => {
-                    const stat = fsSync.statSync(path.join(dirPath, f));
-                    return { name: f, size: stat.size, modified: stat.mtime.toISOString() };
-                  }).sort((a, b) => a.name.localeCompare(b.name));
+                  const items = await fs.readdir(dirPath, { withFileTypes: true });
+                  for (const item of items) {
+                    const fullPath = path.join(dirPath, item.name);
+                    const relPath = path.relative(baseDir, fullPath).split(path.sep).join('/');
+                    
+                    if (item.isDirectory()) {
+                      results.push({ name: item.name, path: relPath, type: 'directory' });
+                      results.push(...await scanDirRecursive(fullPath));
+                    } else {
+                      const validExts = /\.(png|jpg|jpeg|gif|webp|mp3|ogg|wav|ttf|otf|woff2?)$/i;
+                      if (validExts.test(item.name)) {
+                        const stat = fsSync.statSync(fullPath);
+                        results.push({ name: item.name, path: relPath, type: 'file', size: stat.size, modified: stat.mtime.toISOString() });
+                      }
+                    }
+                  }
                 } catch (e) {
-                  console.log('[list-assets]', key, 'error:', e.message);
-                  result[key] = [];
+                  // ignore missing dirs
                 }
+                return results;
               }
 
+              const result = await scanDirRecursive(baseDir);
               res.end(JSON.stringify(result));
             } catch (err) {
               console.error('Error listing assets:', err);
@@ -146,20 +146,9 @@ export default function editorBackend(options = {}) {
             }
           } else if (req.url === '/api/upload-asset') {
             try {
-              const { category, filename, base64 } = payload;
+              const { targetDir, filename, base64 } = payload;
               
-              // Map category to directory path
-              const categoryToDir = {
-                'backgrounds': 'backgrounds',
-                'portraits': 'characters',
-                'bgm': 'audio/bgm',
-                'sfx': 'audio/sfx',
-                'fonts': 'fonts',
-                'bg': 'backgrounds',  // legacy support
-              };
-              
-              const subDir = categoryToDir[category] || category;
-              const assetsDir = path.join(projectRoot, 'public', 'assets', subDir);
+              const assetsDir = path.join(projectRoot, 'public', 'assets', targetDir || '');
               await fs.mkdir(assetsDir, { recursive: true });
               
               // Decode base64
@@ -168,9 +157,35 @@ export default function editorBackend(options = {}) {
               
               await fs.writeFile(path.join(assetsDir, filename), buffer);
               
-              res.end(JSON.stringify({ success: true, path: `/assets/${subDir}/${filename}` }));
+              const relPath = path.join(targetDir || '', filename).split(path.sep).join('/');
+              res.end(JSON.stringify({ success: true, path: relPath }));
             } catch (err) {
               console.error('Error uploading asset:', err);
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          } else if (req.url === '/api/create-folder') {
+            try {
+              const { targetDir } = payload;
+              const dirPath = path.join(projectRoot, 'public', 'assets', targetDir);
+              await fs.mkdir(dirPath, { recursive: true });
+              res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          } else if (req.url === '/api/delete-asset') {
+            try {
+              const { targetPath } = payload;
+              const fullPath = path.join(projectRoot, 'public', 'assets', targetPath);
+              const stat = await fs.stat(fullPath);
+              if (stat.isDirectory()) {
+                await fs.rm(fullPath, { recursive: true, force: true });
+              } else {
+                await fs.unlink(fullPath);
+              }
+              res.end(JSON.stringify({ success: true }));
+            } catch (err) {
               res.statusCode = 500;
               res.end(JSON.stringify({ error: err.message }));
             }

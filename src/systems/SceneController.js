@@ -384,6 +384,10 @@ export class SceneController {
     if (this.scene.layers) {
       const layer = this.scene.layers.getLayer(targetId);
       if (layer) return layer;
+
+      // Fallback: lookup by asset name
+      const layerByAsset = Object.values(this.scene.layers.layers || {}).find(img => img.assetName === targetId);
+      if (layerByAsset) return layerByAsset;
     }
     
     // Check CharacterSystem

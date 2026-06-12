@@ -44,16 +44,9 @@ export class LayerSystem {
     let hasBackground = false;
 
     sortedLayers.forEach(layerConf => {
-      // We only handle backgrounds and props here.
-      // Characters are handled by CharacterSystem, but if an author places a character
-      // via the Layer system, we treat it as a static prop image for now.
-      const prefix = layerConf.type === 'background' ? 'bg_' : (layerConf.type === 'character' ? 'portrait_' : 'prop_');
-      let texKey = `${prefix}${layerConf.asset}`;
-      
-      if (layerConf.type === 'character' && !texKey.endsWith('_neutral')) {
-        // Fallback for static character placements
-        texKey += '_neutral';
-      }
+      if (!layerConf.asset) return;
+
+      let texKey = layerConf.asset;
 
       if (layerConf.type === 'background') {
          hasBackground = true;
@@ -72,30 +65,25 @@ export class LayerSystem {
   }
 
   _createLayerImage(layerConf, texKey) {
-    const isBg = layerConf.type === 'background';
+    const x = layerConf.x || 0;
+    const y = layerConf.y || 0;
     
-    // Default position is center of screen for backgrounds, otherwise as specified
-    const w = this.scene.scale.width;
-    const h = this.scene.scale.height;
+    // Set origin to top-left to match the editor DOM preview exactly
+    const img = this.scene.add.image(x, y, texKey).setOrigin(0, 0);
     
-    const x = isBg ? (w / 2) : (layerConf.x || 0);
-    const y = isBg ? (h / 2) : (layerConf.y || 0);
-    
-    const img = this.scene.add.image(x, y, texKey);
-    
-    if (isBg) {
-       const scaleX = w / img.width;
-       const scaleY = h / img.height;
-       img.setScale(Math.max(scaleX, scaleY));
-    } else if (layerConf.scale !== undefined) {
+    if (layerConf.scale !== undefined) {
        img.setScale(layerConf.scale);
     }
 
-    if (layerConf.opacity !== undefined) {
+    if (layerConf.hidden) {
+       img.setAlpha(0);
+    } else if (layerConf.opacity !== undefined) {
        img.setAlpha(layerConf.opacity);
     }
     
     img.zIndex = layerConf.zIndex || 0;
+    img.layerId = layerConf.id;
+    img.assetName = layerConf.asset;
     
     this.container.add(img);
     this.layers[layerConf.id] = img;
@@ -142,6 +130,22 @@ export class LayerSystem {
       layer.setAlpha(0);
       return Promise.resolve();
     }
+  }
+
+  showLayerByAsset(assetName, duration = 0) {
+    const layer = Object.values(this.layers).find(img => img.assetName === assetName);
+    if (layer) {
+      return this.showLayer(layer.layerId, duration);
+    }
+    return null;
+  }
+
+  hideLayerByAsset(assetName, duration = 0) {
+    const layer = Object.values(this.layers).find(img => img.assetName === assetName);
+    if (layer) {
+      return this.hideLayer(layer.layerId, duration);
+    }
+    return null;
   }
 
   /**

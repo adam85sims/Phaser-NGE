@@ -1,6 +1,6 @@
-- **Current Goal:** Fix event node audio bugs (BGM toast on screen, no music playback) + improve event inspector UX.
-- **Status:** Done.
+- **Current Goal:** Add traditional widgets to the scene preview (move, scale, snap, etc.).
+- **Status:** Next up.
 - **Next Steps:**
-  1. Test audio in-game: add a BGM event node, save, reload game, verify music plays without toast.
-  2. Verify asset dropdown hydrates correctly for bgm/sfx/bg_change.
-  3. Continue working through outstanding audit priorities (condition inspector, etc.).
+  1. Leverage the widget dock at the bottom of the scene preview.
+  2. Implement interactive move/scale gizmos on the `canvas-viewport` for selected image layers.
+  3. Wire the gizmo interactions to update the `layer` properties and trigger `renderScenePreview()`.
