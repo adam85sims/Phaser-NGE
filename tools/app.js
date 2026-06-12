@@ -53,6 +53,22 @@ async function boot() {
     renderOutline(); // refresh layer list
   });
 
+  // Gizmo Toolbar Setup
+  ['pan', 'select', 'move', 'rotate', 'scale'].forEach(mode => {
+    document.getElementById(`tool-${mode}`)?.addEventListener('click', () => {
+      editorState.toolMode = mode;
+      ['pan', 'select', 'move', 'rotate', 'scale'].forEach(m => {
+        document.getElementById(`tool-${m}`)?.classList.toggle('active', m === mode);
+      });
+      renderScenePreview();
+    });
+  });
+
+  document.getElementById('tool-snap')?.addEventListener('click', (e) => {
+    editorState.snapEnabled = !editorState.snapEnabled;
+    e.currentTarget.classList.toggle('active', editorState.snapEnabled);
+  });
+
   // Init panel resize handles
   initResizers();
 
@@ -335,8 +351,48 @@ function renderScenePreview() {
     const scale = layer.scale ?? 1;
     const opacity = layer.hidden ? 0 : (layer.opacity ?? 1);
     const z = layer.zIndex ?? 0;
+    const rot = layer.rotation ?? 0;
     const displayStyle = layer.hidden ? 'display:none;' : '';
-    return `<img src="/assets/${layer.asset}" onerror="this.style.display='none'" data-layer-id="${layer.id}" style="position:absolute;left:0;top:0;opacity:${opacity};${displayStyle}z-index:${z};transform:translate(${x}px,${y}px) scale(${scale});transform-origin:top left;pointer-events:none;" />`;
+    const isSelected = editorState.selectedItemId === layer.id && editorState.selectedItemType === 'layer';
+    
+    const invScale = scale === 0 ? 1 : 1 / Math.abs(scale);
+    let handlesHTML = '';
+    
+    if (isSelected) {
+      if (editorState.toolMode === 'scale') {
+        const hStyle = `position:absolute; width:8px; height:8px; background:#fff; border:1px solid var(--accent); pointer-events:auto; transform: scale(${invScale});`;
+        handlesHTML += `
+          <div class="gizmo-handle scale-handle" data-corner="tl" style="${hStyle} left:0; top:0; margin-left:-4px; margin-top:-4px; cursor:nwse-resize"></div>
+          <div class="gizmo-handle scale-handle" data-corner="tr" style="${hStyle} right:0; top:0; margin-right:-4px; margin-top:-4px; cursor:nesw-resize"></div>
+          <div class="gizmo-handle scale-handle" data-corner="bl" style="${hStyle} left:0; bottom:0; margin-left:-4px; margin-bottom:-4px; cursor:nesw-resize"></div>
+          <div class="gizmo-handle scale-handle" data-corner="br" style="${hStyle} right:0; bottom:0; margin-right:-4px; margin-bottom:-4px; cursor:nwse-resize"></div>
+        `;
+      } else if (editorState.toolMode === 'rotate') {
+        const hStyle = `position:absolute; width:10px; height:10px; background:var(--accent); border-radius:50%; pointer-events:auto; transform: scale(${invScale});`;
+        handlesHTML += `
+          <div style="position:absolute; left:50%; top:-20px; width:1px; height:20px; background:var(--accent); pointer-events:none; transform: scaleY(${invScale}); transform-origin: bottom;"></div>
+          <div class="gizmo-handle rotate-handle" style="${hStyle} left:50%; top:-20px; margin-left:-5px; margin-top:-5px; cursor:crosshair"></div>
+        `;
+      }
+    }
+
+    let boxStyle = 'position:absolute;inset:0; ';
+    if (isSelected) {
+      boxStyle += `border:1px solid var(--accent); ${editorState.toolMode === 'move' ? 'pointer-events:auto; cursor:move;' : 'pointer-events:none;'}`;
+    } else if (editorState.toolMode === 'select') {
+      boxStyle += 'pointer-events:auto; cursor:pointer;';
+    } else {
+      boxStyle += 'pointer-events:none;';
+    }
+
+    return `
+      <div class="scene-layer-wrapper" data-layer-id="${layer.id}" style="position:absolute;left:0;top:0;opacity:${opacity};${displayStyle}z-index:${z};transform:translate(calc(${x}px - 50%), calc(${y}px - 50%)) scale(${scale}) rotate(${rot}deg);transform-origin:center center; display:inline-block;">
+        <img src="/assets/${layer.asset}" onerror="this.style.display='none'" style="display:block; pointer-events:none;" />
+        <div class="gizmo-box" data-layer-id="${layer.id}" style="${boxStyle}">
+          ${handlesHTML}
+        </div>
+      </div>
+    `;
   }).join('');
 
   const layerCount = layers.filter(l => l.asset).length;
@@ -503,7 +559,7 @@ function renderScenePreview() {
         const dragData = JSON.parse(dragDataStr || '{}');
         // Scene canvas accepts any image drop.
         if (dragData.type === 'image' && dragData.path) {
-          import('./views/scene-composer.js').then(mod => {
+import('./views/scene-composer.js').then(mod => {
             const layer = mod.handleAssetDrop(dragData.path);
             if (layer) {
               editorState.selectedItemId = layer.id;
@@ -524,14 +580,67 @@ function renderScenePreview() {
   const transform = document.getElementById('canvas-transform');
   if (!viewport || !transform) return;
 
-  // Middle-button pan
-  viewport.addEventListener('mousedown', (e) => {
-    if (e.button === 1) {
+  // ── Mouse Interaction ──
+  let activeGizmo = null; // { type, layerId, startX, startY, initX, initY, initScale, initRot, corner }
+
+  document.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 && e.button !== 1) return;
+
+    // 1. Middle-button pan or 'pan' tool
+    if (e.button === 1 || (e.button === 0 && editorState.toolMode === 'pan')) {
       e.preventDefault();
       editorState.previewDragging = true;
       editorState.previewDragStartX = e.clientX - editorState.previewPanX * editorState.previewZoom;
       editorState.previewDragStartY = e.clientY - editorState.previewPanY * editorState.previewZoom;
       viewport.style.cursor = 'grabbing';
+      return;
+    }
+
+    if (e.button !== 0) return;
+
+    // 2. Select mode handling
+    if (editorState.toolMode === 'select' && e.target.classList.contains('gizmo-box')) {
+      const layerId = e.target.getAttribute('data-layer-id');
+      if (layerId && editorState.selectedItemId !== layerId) {
+        editorState.selectedItemId = layerId;
+        editorState.selectedItemType = 'layer';
+        renderUI();
+        return;
+      }
+    }
+
+    // 3. Gizmo handling
+    const isMove = e.target.classList.contains('gizmo-box') && editorState.toolMode === 'move';
+    const isScale = e.target.classList.contains('scale-handle');
+    const isRotate = e.target.classList.contains('rotate-handle');
+
+    if (isMove || isScale || isRotate) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const layerId = isMove ? e.target.getAttribute('data-layer-id') : e.target.closest('.scene-layer-wrapper').getAttribute('data-layer-id');
+      const sceneData = editorState.scenes[editorState.activeSceneId];
+      const layer = sceneData?.layers?.find(l => l.id === layerId);
+      if (!layer) return;
+
+      activeGizmo = {
+        type: isMove ? 'move' : (isScale ? 'scale' : 'rotate'),
+        layerId,
+        layer,
+        startX: e.clientX,
+        startY: e.clientY,
+        initX: layer.x ?? 0,
+        initY: layer.y ?? 0,
+        initScale: layer.scale ?? 1,
+        initRot: layer.rotation ?? 0,
+        corner: e.target.getAttribute('data-corner')
+      };
+      
+      if (isRotate) {
+        const rect = e.target.closest('.scene-layer-wrapper').getBoundingClientRect();
+        activeGizmo.centerX = rect.left + rect.width / 2;
+        activeGizmo.centerY = rect.top + rect.height / 2;
+      }
     }
   });
 
@@ -542,6 +651,37 @@ function renderScenePreview() {
       editorState.previewPanX = (e.clientX - editorState.previewDragStartX) / z;
       editorState.previewPanY = (e.clientY - editorState.previewDragStartY) / z;
       updateScenePreviewTransform();
+    } else if (activeGizmo) {
+      e.preventDefault();
+      const dx = (e.clientX - activeGizmo.startX) / editorState.previewZoom;
+      const dy = (e.clientY - activeGizmo.startY) / editorState.previewZoom;
+      const l = activeGizmo.layer;
+      
+      if (activeGizmo.type === 'move') {
+        let nx = activeGizmo.initX + dx;
+        let ny = activeGizmo.initY + dy;
+        if (editorState.snapEnabled) {
+          nx = Math.round(nx / 10) * 10;
+          ny = Math.round(ny / 10) * 10;
+        }
+        l.x = nx;
+        l.y = ny;
+      } else if (activeGizmo.type === 'scale') {
+        const corner = activeGizmo.corner;
+        const dir = (corner === 'tr' || corner === 'br') ? 1 : -1;
+        let ns = activeGizmo.initScale + (dx * dir * 0.01);
+        if (editorState.snapEnabled) ns = Math.round(ns * 10) / 10;
+        l.scale = ns;
+      } else if (activeGizmo.type === 'rotate') {
+        const angle1 = Math.atan2(activeGizmo.startY - activeGizmo.centerY, activeGizmo.startX - activeGizmo.centerX);
+        const angle2 = Math.atan2(e.clientY - activeGizmo.centerY, e.clientX - activeGizmo.centerX);
+        let dAngle = (angle2 - angle1) * 180 / Math.PI;
+        let nr = activeGizmo.initRot + dAngle;
+        if (editorState.snapEnabled) nr = Math.round(nr / 15) * 15;
+        l.rotation = nr;
+      }
+      
+      renderScenePreview();
     } else {
       // Mouse position tracker
       const sViewport = document.getElementById('scene-viewport');
@@ -557,9 +697,14 @@ function renderScenePreview() {
   });
 
   document.addEventListener('mouseup', (e) => {
-    if (e.button === 1 && editorState.previewDragging) {
+    if (editorState.previewDragging) {
       editorState.previewDragging = false;
       viewport.style.cursor = 'grab';
+    }
+    if (activeGizmo) {
+      activeGizmo = null;
+      markDirty();
+      renderUI(); // Full refresh to update inspector
     }
   });
 
@@ -682,6 +827,8 @@ modeButtons.forEach(function (btn) {
     const sceneView = document.getElementById('scene-view');
     if (mode === 'script') {
       _renderScriptMode(sceneView);
+    } else if (mode === 'animations') {
+      _renderAnimationsMode(sceneView);
     } else if (mode === 'menu') {
       _renderMenuMode(sceneView);
     } else if (mode === 'splash') {
@@ -725,6 +872,18 @@ async function _renderScriptMode(container) {
       stats: editorState.stats
     });
   }
+}
+
+let _animationsEditorModule = null;
+
+async function _renderAnimationsMode(container) {
+  if (!container) return;
+  
+  if (!_animationsEditorModule) {
+    _animationsEditorModule = await import('./views/animations.js');
+  }
+  
+  _animationsEditorModule.render(container, { data: editorState });
 }
 
 let _menuEditorModule = null;

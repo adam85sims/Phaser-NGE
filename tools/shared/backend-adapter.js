@@ -30,6 +30,10 @@ export const backend = {
     return fetchJSON(`/data/scenes/${id}.json`);
   },
 
+  async fetchAnimation(id) {
+    return fetchJSON(`/data/animations/${id}.json`);
+  },
+
   /**
    * Save entire project state
    */

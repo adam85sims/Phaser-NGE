@@ -80,10 +80,12 @@ export default function editorBackend(options = {}) {
             try {
               const dataDir = path.join(projectRoot, 'data');
               const scenesDir = path.join(dataDir, 'scenes');
+              const animationsDir = path.join(dataDir, 'animations');
 
               // Ensure directories exist
               await fs.mkdir(dataDir, { recursive: true });
               await fs.mkdir(scenesDir, { recursive: true });
+              await fs.mkdir(animationsDir, { recursive: true });
 
               // Write main project files
               if (payload.game) await fs.writeFile(path.join(dataDir, 'game.json'), JSON.stringify(payload.game, null, 2));
@@ -107,6 +109,22 @@ export default function editorBackend(options = {}) {
                 }
               }
 
+              // Write animations
+              if (payload.animations) {
+                // Clear existing animations first to handle deletions
+                const existingAnims = await fs.readdir(animationsDir);
+                for (const file of existingAnims) {
+                  if (file.endsWith('.json')) {
+                    await fs.unlink(path.join(animationsDir, file));
+                  }
+                }
+
+                // Write new animations
+                for (const [id, animData] of Object.entries(payload.animations)) {
+                  await fs.writeFile(path.join(animationsDir, `${id}.json`), JSON.stringify(animData, null, 2));
+                }
+              }
+
               res.end(JSON.stringify({ success: true }));
             } catch (err) {
               console.error('Error saving project:', err);
@@ -117,8 +135,10 @@ export default function editorBackend(options = {}) {
             try {
               const dataDir = path.join(projectRoot, 'data');
               const scenesDir = path.join(dataDir, 'scenes');
+              const animationsDir = path.join(dataDir, 'animations');
               
               await fs.mkdir(scenesDir, { recursive: true });
+              await fs.mkdir(animationsDir, { recursive: true });
               
               // Clear current project
               const dataFiles = ['game.json', 'characters.json', 'variables.json'];
@@ -130,6 +150,13 @@ export default function editorBackend(options = {}) {
                 const existingScenes = await fs.readdir(scenesDir);
                 for (const file of existingScenes) {
                   if (file.endsWith('.json')) await fs.unlink(path.join(scenesDir, file));
+                }
+              } catch (e) {}
+
+              try {
+                const existingAnims = await fs.readdir(animationsDir);
+                for (const file of existingAnims) {
+                  if (file.endsWith('.json')) await fs.unlink(path.join(animationsDir, file));
                 }
               } catch (e) {}
 

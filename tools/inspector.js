@@ -143,6 +143,7 @@ export function renderInspectorContent(container) {
       const isBG   = evType === 'bg_change';
       const isStop = evType === 'bgm_stop';
       const isCam  = evType === 'camera_shake' || evType === 'camera_flash';
+      const isAnim = evType === 'play_animation';
 
       // Volume field for audio events
       const volVal = node.eventVolume != null ? node.eventVolume : 1.0;
@@ -166,6 +167,7 @@ export function renderInspectorContent(container) {
           <option value="bg_change"${isBG?' selected':''}>🖼️ Change Background</option>
           <option value="camera_shake"${evType==='camera_shake'?' selected':''}>📳 Camera Shake</option>
           <option value="camera_flash"${evType==='camera_flash'?' selected':''}>✨ Camera Flash</option>
+          <option value="play_animation"${isAnim?' selected':''}>🎬 Play Animation</option>
         </select></div>
 
         <div id="ev-value-section">
@@ -188,6 +190,17 @@ export function renderInspectorContent(container) {
             <div class="form-group">
               <label>Value</label>
               <input value="${node.eventValue||''}" data-field="eventValue" placeholder="${camPlaceholder}" />
+            </div>` : ''}
+          ${isAnim ? `
+            <div class="form-group">
+              <label>Target (Layer/Char ID)</label>
+              <input value="${node.eventTarget||''}" data-field="eventTarget" placeholder="e.g. dave" />
+            </div>
+            <div class="form-group">
+              <label>Animation Key</label>
+              <select data-field="eventValue" id="ev-asset-select">
+                <option value="${node.eventValue||''}">${node.eventValue || '— loading… —'}</option>
+              </select>
             </div>` : ''}
         </div>
 
@@ -455,6 +468,10 @@ function renderLayerInspector(container) {
           <div class="form-group">
             <label>Scale</label>
             <input type="number" value="${layer.scale ?? 1}" data-field="scale" data-type="number" step="0.1" min="0.1" max="5" data-layer="true" />
+          </div>
+          <div class="form-group">
+            <label>Rotation</label>
+            <input type="number" value="${layer.rotation ?? 0}" data-field="rotation" data-type="number" step="15" data-layer="true" />
           </div>
           <div class="form-group">
             <label>Z-Index</label>

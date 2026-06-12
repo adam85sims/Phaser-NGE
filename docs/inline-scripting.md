@@ -18,11 +18,17 @@ Controls the visibility of layers/objects on the screen. The `target` must match
 - **`[show:imagename]`**: Fades the object in exactly when the typewriter reaches this point in the text.
 - **`[hide:imagename]`**: Fades the object out exactly when the typewriter reaches this point in the text.
 
+### Keyframe Animations
+Triggers a predefined keyframe animation (created in the Animations Editor Mode) on a specific object. The syntax takes a third parameter for the animation key:
+
+- **`[anim:target:animation_key]`**: Starts the specified animation on the target object immediately. 
+  *Example:* `[anim:dave:spin_in]` will trigger the `spin_in` animation on the `dave` layer exactly at that point in the dialogue.
+
 **Example Usage:**
 ```text
-Here is the ancient relic you asked for. [show:ancient_relic] It has been in my family for generations.
+Here is the ancient relic you asked for. [show:ancient_relic] [anim:ancient_relic:pulse] It has been in my family for generations.
 ```
-In this example, the `ancient_relic` asset will become visible immediately after the period following "for."
+In this example, the `ancient_relic` asset will become visible immediately after the period following "for", and simultaneously start its `pulse` animation.
 
 ## Best Practices
 - **Asset Names:** Always use the raw asset name (e.g., `gold_coin`, `elena_neutral`) rather than internal layer IDs.

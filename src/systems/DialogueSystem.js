@@ -151,16 +151,30 @@ export class DialogueSystem {
     this._tags = [];
     let cleanText = '';
     let match;
-    const regex = /\[(show|hide):([^\]]+)\]/gi;
+    const regex = /\[(show|hide|anim):([^\]]+)\]/gi;
     let lastIdx = 0;
     const strText = text || '';
     
     while ((match = regex.exec(strText)) !== null) {
       cleanText += strText.slice(lastIdx, match.index);
+      
+      const action = match[1].toLowerCase();
+      let target = match[2].trim();
+      let animKey = null;
+      
+      if (action === 'anim') {
+        const parts = target.split(':');
+        if (parts.length >= 2) {
+          target = parts[0].trim();
+          animKey = parts[1].trim();
+        }
+      }
+
       this._tags.push({
         index: cleanText.length,
-        action: match[1].toLowerCase(),
-        target: match[2].trim()
+        action: action,
+        target: target,
+        animKey: animKey
       });
       lastIdx = regex.lastIndex;
     }
@@ -183,9 +197,24 @@ export class DialogueSystem {
     // Check if any tags trigger at the current charIndex
     while (this._tags.length > 0 && this._tags[0].index === this._charIndex) {
       const tag = this._tags.shift();
-      if (this.scene && this.scene.layers) {
-        if (tag.action === 'show') this.scene.layers.showLayerByAsset(tag.target, 300);
-        else if (tag.action === 'hide') this.scene.layers.hideLayerByAsset(tag.target, 300);
+      if (this.scene) {
+        if (tag.action === 'show' && this.scene.layers) this.scene.layers.showLayerByAsset(tag.target, 300);
+        else if (tag.action === 'hide' && this.scene.layers) this.scene.layers.hideLayerByAsset(tag.target, 300);
+        else if (tag.action === 'anim' && tag.target && tag.animKey) {
+          // Play inline animation
+          let targetObj = null;
+          if (this.scene.layers?.layers?.has(tag.target)) targetObj = this.scene.layers.layers.get(tag.target).image;
+          else if (this.scene.characters?.activeSprites?.has(tag.target)) targetObj = this.scene.characters.activeSprites.get(tag.target);
+          
+          if (targetObj && this.scene.sys.game.scene.keys.BootScene.Data?.animations) {
+            const animData = this.scene.sys.game.scene.keys.BootScene.Data.animations[tag.animKey];
+            if (animData) {
+              import('./AnimationRunner.js').then(({ AnimationRunner }) => {
+                AnimationRunner.play(this.scene, targetObj, animData);
+              });
+            }
+          }
+        }
       }
     }
 

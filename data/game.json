@@ -12,5 +12,8 @@
     "autoAdvance": false,
     "bgmVolume": 0.7,
     "sfxVolume": 1
-  }
+  },
+  "animations": [
+    "fade_and_slide"
+  ]
 }

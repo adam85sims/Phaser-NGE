@@ -1,6 +1,6 @@
 ---
 name: narrative-engine-overview
-description: "Project-level guide for the Narrative Engine — a data-driven visual novel / branching-narrative engine built on Phaser 4. Covers the two-person workflow (agent owns engine, user owns content/tools), project structure, data schema, agent conventions, and how the skill files map to modules. Load this first when starting work on any part of the engine."
+description: "Project-level guide for the Narrative Engine — a data-driven visual novel / branching-narrative engine built on Phaser 4. Covers project structure, data schema, agent conventions, and how the skill files map to modules. Load this first when starting work on any part of the engine."
 ---
 
 # Narrative Engine — Agent Overview
@@ -9,20 +9,13 @@ description: "Project-level guide for the Narrative Engine — a data-driven vis
 
 **Repo:** `narrative-engine/` (Phaser 4 + Vite)
 
-## Two-Person Workflow
-
-| Role | Territory | Owns |
-|------|-----------|------|
-| **Agent (AI)** | `src/` | Engine code, vite.config.js, package.json |
-| **User (Human)** | `data/`, `tools/`, `public/assets/` | Story content, editors, media assets |
-
-The agent should **never** modify files in `data/` or `tools/` without explicit user direction. The agent's job is the engine runtime.
+The agent owns the full project — engine, data, tools, assets — and edits freely across all directories. Only ask before destructive changes to user-authored content.
 
 ## Project Structure
 
 ```
 narrative-engine/
-├── src/                    # Engine — agent territory
+├── src/                    # Engine code
 │   ├── main.js             # Phaser game config
 │   ├── scenes/
 │   │   ├── BootScene.js    # Fetches JSON, populates Data store
@@ -35,12 +28,12 @@ narrative-engine/
 │       ├── VariableSystem.js  # Flags/counters, conditions
 │       ├── SaveSystem.js      # LocalStorage save/load
 │       └── AudioSystem.js     # BGM/SFX manager
-├── data/                   # Story content — user territory
+├── data/                   # Story content
 │   ├── game.json           # Master config
 │   ├── characters.json     # Character defs
 │   ├── variables.json      # Variable defs
 │   └── scenes/*.json       # One JSON file per scene
-├── tools/                  # Editors — user territory
+├── tools/                  # Editors
 │   └── dialogue-editor/    # Standalone node graph editor
 ├── skills/                 # Agent skill files (per-module)
 └── index.html

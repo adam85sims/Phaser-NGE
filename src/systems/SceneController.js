@@ -517,6 +517,7 @@ export class SceneController {
       this.onAction({
         type: node.eventType || 'sfx',
         value: node.eventValue || null,
+        target: node.eventTarget || null,
         volume: node.eventVolume != null ? node.eventVolume : null,
         setFlag: node.setFlag,
         setValue: node.setValue,

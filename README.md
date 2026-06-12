@@ -5,21 +5,23 @@
 **It's a work in progress. Dear god, it's a work in progress.** Don't try to actually use this on something serious yet.
 
 **What works:**
-- ✅ Visual node graph editing (drag, connect, rearrange)
-- ✅ Inspector with live state sync
+- ✅ Visual node graph editing (drag, connect, rearrange, Cmd+Space search palette)
+- ✅ Inspector with live state sync and asset dropdowns
 - ✅ Character editor (CRUD, expressions, portraits, color picker)
 - ✅ Variable editor (inline editing, filtering, usage tracking)
-- ✅ File explorer (Unity-style two-panel layout)
+- ✅ File explorer (manage folders and files natively)
+- ✅ Keyframe Animation Editor (timeline scrubber, tracks, DOM-based live preview)
+- ✅ Interactive Scene Gizmos (drag, scale, rotate assets directly in the preview canvas)
 - ✅ Asset browser (drag-drop upload, usage tracking)
+- ✅ Inline Scripting in Dialogue (`[show:]`, `[hide:]`, `[anim:]`)
 - ✅ Game engine (dialogue, choices, conditions, events, save/load)
+- ✅ Full file persistence (Vite-powered backend API)
 
 **What's pending:**
-- 🔲 Backend API for file persistence (save button is mocked)
 - 🔲 Script mode code editor
-- 🔲 Full asset upload pipeline (needs backend endpoint)
 - 🔲 Polish & QA
 
-Use at your own risk. The editor UI is functional but changes don't persist to disk yet.
+Use at your own risk. The editor UI is functional and all changes now persist directly to the disk via the Vite backend API.
 
 ---
 
@@ -46,7 +48,7 @@ This starts a dev server. Two URLs open up:
 
 Press **F1**, **F2**, **F3** in the game to switch between test scenes.
 
-> **Note:** The editor's Save button is currently mocked. Export your work manually by copying JSON from the console or using the Export buttons in Characters/Variables tabs.
+> **Note:** The editor automatically saves your changes to the `data/` directory when you press Ctrl+S or click the Save button.
 
 ---
 
@@ -85,8 +87,8 @@ Everything your story needs lives in the `data/` folder:
    - **Variables**: Track game state flags and counters
 4. Click a node in the graph or outline to edit its properties
 5. Drag nodes to rearrange, drag wires to connect
-6. Change X/Y in inspector to move nodes (live sync with graph)
-7. Click **Save** (currently mocked — exports to console)
+6. Change X/Y in inspector, or use the interactive Gizmos in the preview to move/scale/rotate nodes (live sync with graph)
+7. Click **Save** to persist all changes directly to the `data/` directory
 
 **Pro tips:**
 - Press **3** in the scene view to toggle 3D grid mode (future hook)
@@ -243,10 +245,10 @@ Output goes to `dist/` — a standalone HTML/JS bundle you can host anywhere.
 1. **Write:** Open Editor v2, go to Dialogue Editor tab, create nodes
 2. **Edit:** Select nodes, change properties in inspector, drag to rearrange
 3. **Connect:** Drag wires between output ports and input ports
-4. **Export:** (Pending) For now, manually copy scene JSON from `data/scenes/`
-5. **Register:** Add the scene ID to `data/game.json`'s `"scenes"` array
+4. **Save:** Click the Save button (or press Ctrl+S). The Editor backend automatically persists the changes directly into the `data/scenes/` folder!
+5. **Register:** If it's a completely new scene, make sure to add the scene ID to `data/game.json`'s `"scenes"` array.
 6. **Test:** Refresh the game, press the hotkey or set `startScene` in game.json
-7. **Iterate:** Edit in the editor, re-export, replace the file, refresh
+7. **Iterate:** Edit in the editor, hit Save, refresh the game
 
 > **Tip:** Use the Files tab to browse and verify your scene JSON files. Double-click to open (future: in-editor code view).
 

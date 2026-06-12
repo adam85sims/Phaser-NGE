@@ -69,10 +69,14 @@ export class LayerSystem {
     const y = layerConf.y || 0;
     
     // Set origin to top-left to match the editor DOM preview exactly
-    const img = this.scene.add.image(x, y, texKey).setOrigin(0, 0);
+    const img = this.scene.add.image(x, y, texKey).setOrigin(0.5, 0.5);
     
     if (layerConf.scale !== undefined) {
        img.setScale(layerConf.scale);
+    }
+    
+    if (layerConf.rotation !== undefined) {
+       img.setAngle(layerConf.rotation);
     }
 
     if (layerConf.hidden) {

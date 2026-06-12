@@ -153,11 +153,33 @@ export class GameScene extends Phaser.Scene {
         case 'camera_flash':
           this.cameras.main.flash(200, 255, 255, 255);
           break;
+        case 'play_animation': {
+          const targetId = data.target;
+          const animKey = data.value;
+          let targetObj = null;
+          
+          if (this.layers.layers.has(targetId)) targetObj = this.layers.layers.get(targetId).image;
+          else if (this.characters.activeSprites.has(targetId)) targetObj = this.characters.activeSprites.get(targetId);
+          
+          if (targetObj && this.sys.game.scene.keys.BootScene.Data?.animations) {
+            const animData = this.sys.game.scene.keys.BootScene.Data.animations[animKey];
+            if (animData) {
+              import('../systems/AnimationRunner.js').then(({ AnimationRunner }) => {
+                AnimationRunner.play(this, targetObj, animData);
+              });
+            } else {
+              console.warn(`Animation key not found: ${animKey}`);
+            }
+          } else {
+            console.warn(`play_animation target not found: ${targetId}`);
+          }
+          break;
+        }
       }
 
       // Show a small toast notification for visible events only.
       // Audio events (bgm, sfx, bgm_stop) are silent — no on-screen indicator needed.
-      const _silentEventTypes = new Set(['bgm', 'sfx', 'bgm_stop']);
+      const _silentEventTypes = new Set(['bgm', 'sfx', 'bgm_stop', 'play_animation']);
       if (data.type && data.type !== 'camera_flash' && !_silentEventTypes.has(data.type)) {
         const toast = this.add.text(this.W / 2, this.H - 60, `⚡ ${data.type}${data.value ? ': ' + data.value : ''}`, {
           fontSize: '12px',

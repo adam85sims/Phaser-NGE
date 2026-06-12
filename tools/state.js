@@ -8,6 +8,7 @@ export const editorState = {
   variableDefs: {},
   scenes: {},
   theme: {},
+  animations: {},
   
   // UI State
   selectedItemId: null,
@@ -26,6 +27,10 @@ export const editorState = {
   previewDragging: false,
   previewDragStartX: 0,
   previewDragStartY: 0,
+  
+  // Transform Gizmo Settings
+  toolMode: 'select', // 'select', 'move', 'rotate', 'scale'
+  snapEnabled: false,
   
   // Stats
   stats: {
@@ -72,6 +77,22 @@ export async function loadProjectData() {
       markDirty();
     }
     
+    // Load animations
+    const validAnims = [];
+    for (const id of (game.animations || [])) {
+      try {
+        const anim = await backend.fetchAnimation(id);
+        editorState.animations[id] = anim;
+        validAnims.push(id);
+      } catch (e) {
+        console.warn('Skipping missing animation:', id);
+      }
+    }
+    if (validAnims.length !== (game.animations || []).length) {
+      editorState.gameConfig.animations = validAnims;
+      markDirty();
+    }
+    
     editorState.stats.nodeCount = totalNodes;
     
     // Select first scene by default
@@ -94,7 +115,8 @@ export function serializeProject() {
     characters: editorState.characters,
     variables: editorState.variableDefs,
     theme: editorState.theme,
-    scenes: editorState.scenes
+    scenes: editorState.scenes,
+    animations: editorState.animations
   };
 }
 

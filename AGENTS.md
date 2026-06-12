@@ -2,14 +2,7 @@
 
 Data-driven narrative game engine on Phaser 4. Stories are JSON scene files; the engine reads them and renders a visual-novel-style game. A standalone editor app at `tools/index.html` lets writers build scenes visually.
 
-## Two-Person Workflow
-
-| Role | Territory |
-|------|-----------|
-| **Agent (AI)** | `src/`, `vite.config.js`, `package.json` |
-| **User (Human)** | `data/`, `tools/`, `public/assets/`, `skills/` |
-
-The agent should **not** modify `data/` or `tools/` files without explicit direction. Engine runtime is the agent's job; story content and editor UX are the user's.
+The agent owns the full project — engine, data, tools, assets — and edits freely across all directories. Only ask before destructive changes to user-authored content.
 
 ## Commands
 
@@ -39,7 +32,7 @@ npm run import-asset -- <type> <file>
 
 ```
 Phaser-NGE/
-├── src/                       # Engine — agent territory
+├── src/                       # Engine code
 │   ├── main.js                # Phaser config: 800x600, scenes=[Boot,Menu,Game]
 │   ├── scenes/
 │   │   ├── BootScene.js       # fetch() all data, populate Data store, transition
@@ -55,14 +48,14 @@ Phaser-NGE/
 │       ├── AudioSystem.js     # BGM/SFX manager
 │       └── SettingsSystem.js  # Persistent settings (text speed, volume, fullscreen)
 │
-├── data/                      # Story content — user territory
+├── data/                      # Story content
 │   ├── game.json              # Master config: title, startScene, scenes[], defaults
 │   ├── characters.json        # Character definitions
 │   ├── variables.json         # Game state variable definitions
 │   ├── theme.json             # UI theme (text box layout, fonts, colors)
 │   └── scenes/<id>.json       # One JSON file per scene
 │
-├── tools/                     # Editors — user territory
+├── tools/                     # Editors
 │   ├── index.html             # Editor v2 shell (open this)
 │   ├── app.js, app.css, graph.js, inspector.js, state.js
 │   ├── views/                 # Editor v2 view modules
@@ -72,7 +65,7 @@ Phaser-NGE/
 │   └── import-asset.sh
 │
 ├── skills/                    # Per-module reference (load before editing)
-│   ├── overview/              #    — project overview + two-person workflow
+│   ├── overview/              #    — project overview
 │   ├── scene-controller/      #    — graph state machine
 │   ├── dialogue-system/       #    — typewriter / choices
 │   ├── character-system/      #    — portraits / expressions
@@ -84,7 +77,7 @@ Phaser-NGE/
 │   ├── game-scene/            #    — main loop / wiring
 │   └── editor-app/            #    — editor app shell
 │
-├── public/assets/             # Media — user territory
+├── public/assets/             # Media
 │   ├── backgrounds/           # PNG/JPG, key = filename stem (no ext)
 │   ├── characters/            # Portrait images
 │   └── audio/{bgm,sfx}/

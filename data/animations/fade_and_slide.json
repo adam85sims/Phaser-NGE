@@ -1,0 +1,87 @@
+{
+  "id": "fade_and_slide",
+  "duration": 1000,
+  "loop": -1,
+  "tracks": {
+    "x": [
+      {
+        "time": 60,
+        "value": "0",
+        "ease": "Linear"
+      },
+      {
+        "time": 230,
+        "value": "0",
+        "ease": "Linear"
+      },
+      {
+        "time": 420,
+        "value": "0",
+        "ease": "Linear"
+      },
+      {
+        "time": 620,
+        "value": "0",
+        "ease": "Linear"
+      },
+      {
+        "time": 770,
+        "value": "0",
+        "ease": "Linear"
+      }
+    ],
+    "y": [
+      {
+        "time": 20,
+        "value": "40",
+        "ease": "Linear"
+      },
+      {
+        "time": 90,
+        "value": "0",
+        "ease": "Linear"
+      },
+      {
+        "time": 500,
+        "value": "20",
+        "ease": "Linear"
+      }
+    ],
+    "alpha": [
+      {
+        "time": 40,
+        "value": "0",
+        "ease": "Linear"
+      },
+      {
+        "time": 120,
+        "value": "1",
+        "ease": "Linear"
+      },
+      {
+        "time": 550,
+        "value": "0",
+        "ease": "Linear"
+      },
+      {
+        "time": 850,
+        "value": "1",
+        "ease": "Linear"
+      }
+    ],
+    "scale": [
+      {
+        "time": 450,
+        "value": "1",
+        "ease": "Linear"
+      },
+      {
+        "time": 570,
+        "value": "1",
+        "ease": "Linear"
+      }
+    ],
+    "rotation": []
+  },
+  "previewAsset": "/assets/characters/Marcus_stern_00001_.png"
+}

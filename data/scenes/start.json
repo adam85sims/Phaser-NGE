@@ -16,8 +16,8 @@
     {
       "id": "dialogue_1",
       "type": "dialogue",
-      "x": -680,
-      "y": -80,
+      "x": -660,
+      "y": -40,
       "speaker": "narrator",
       "text": "Dave is about to have a very very bad day. [show:dave_fullbody_00001_]",
       "next": ""
@@ -59,6 +59,15 @@
       "zIndex": 1,
       "opacity": 1,
       "hidden": false
+    },
+    {
+      "id": "layer_1781299290231_728",
+      "asset": "characters/Marcus_stern_00001_.png",
+      "x": 0,
+      "y": 0,
+      "scale": 1,
+      "zIndex": 2,
+      "opacity": 1
     }
   ]
 }

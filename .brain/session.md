@@ -1,6 +1,6 @@
-- **Current Goal:** Add traditional widgets to the scene preview (move, scale, snap, etc.).
-- **Status:** Next up.
+- **Current Goal:** Awaiting next feature requests.
+- **Status:** Done for the week.
 - **Next Steps:**
-  1. Leverage the widget dock at the bottom of the scene preview.
-  2. Implement interactive move/scale gizmos on the `canvas-viewport` for selected image layers.
-  3. Wire the gizmo interactions to update the `layer` properties and trigger `renderScenePreview()`.
+  1. Hermes Agent to build out a Sprite editor (UI, 9 Slice, origin points).
+  2. Implement any follow-up tweaks to the Keyframe Animation Editor.
+  3. Expand RPG elements / sprite sheet animation support down the line.
