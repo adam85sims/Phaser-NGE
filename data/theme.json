@@ -27,7 +27,7 @@
     "toastFontSize": 24,
     "toastBackgroundColor": "#00000088",
     "menu": {
-      "background": null,
+      "background": "http://localhost:3000/assets/backgrounds/BG_forest_00001_.png",
       "title": {
         "text": "Dave is Drowning",
         "x": 640,

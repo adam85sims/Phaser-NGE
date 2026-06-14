@@ -21,7 +21,7 @@ export class CharacterSystem {
    */
   show(characterId, expression, position, zIndex = 0) {
     const charData = Data.getCharacter(characterId);
-    if (!charData) return;
+    if (!charData || charData.invisible) return;
 
     // Hide existing portrait for this character if present
     if (this.portraits[characterId]) {

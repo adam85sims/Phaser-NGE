@@ -26,3 +26,4 @@ Features identified during the VN UX review but deferred to focus on core improv
 
 ## System Architecture
 - **Multi-project support** — expand the editor and engine to support saving and loading multiple independent projects into `data/projects/<name>/` instead of a single root `data/` folder.
+- **Scene Camera Object** — introduce a manipulatable camera object (with x, y, and zoom properties) per scene, allowing editors to easily pan and frame shots directly in the viewport without needing to manually offset all individual background layers.

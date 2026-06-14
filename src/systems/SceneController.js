@@ -1,4 +1,5 @@
 import { Data } from './DataLoader.js';
+import { Registry } from './Registry.js';
 
 /**
  * SceneController — graph-based narrative state machine.
@@ -77,6 +78,8 @@ export class SceneController {
       returnNode: node.next || null
     });
 
+    this.vars.pushScope(node.args || {});
+
     // Start the sub-scene, optionally at a specific node or its entry point
     this.startScene(node.sceneId, node.nodeId || null);
   }
@@ -97,52 +100,12 @@ export class SceneController {
       this.onBackgroundChange(node.background);
     }
 
-    switch (node.type) {
-      case 'dialogue':
-        this.showDialogue(node);
-        break;
-      case 'choice':
-        this.presentChoices(node);
-        break;
-      case 'condition':
-        this.evaluateCondition(node);
-        break;
-      case 'event':
-        this.fireEvent(node);
-        break;
-      case 'wait':
-        this.doWait(node);
-        break;
-      case 'set_variable':
-        this.setVariableNode(node);
-        break;
-      case 'timed_choice':
-        this.presentTimedChoice(node);
-        break;
-      case 'animate':
-        this.animateNode(node);
-        break;
-      case 'show_object':
-        this.showObjectNode(node);
-        break;
-      case 'hide_object':
-        this.hideObjectNode(node);
-        break;
-      case 'camera':
-        this.cameraNode(node);
-        break;
-      case 'random_branch':
-        this.evaluateRandomBranch(node);
-        break;
-      case 'call_scene':
-        this.callScene(node);
-        break;
-      case 'end':
-        this.endScene(node);
-        break;
-      default:
-        console.warn(`Unknown node type: ${node.type}`);
-        this.advance();
+    const typeDef = Registry.getNodeType(node.type);
+    if (typeDef && typeDef.executeRuntime) {
+      typeDef.executeRuntime(node, this);
+    } else {
+      console.warn(`Unknown node type: ${node.type}`);
+      this.advance();
     }
   }
 
@@ -159,6 +122,9 @@ export class SceneController {
     if (node?.nextScene) {
       // Explicit scene transition — clear stack and go
       this._callStack = [];
+      while (this.vars.scopes && this.vars.scopes.length > 1) {
+        this.vars.popScope();
+      }
       this.isRunning = false;
       if (this.onSceneEnd) {
         this.onSceneEnd({ text: node?.text || null, nextScene: node.nextScene });
@@ -169,6 +135,9 @@ export class SceneController {
     // If there's a return point on the call stack, go back
     if (this._callStack.length > 0) {
       const pop = this._callStack.pop();
+      if (this.vars.scopes) {
+        this.vars.popScope();
+      }
       // Restore the calling scene
       this.currentScene = pop.scene;
       this.isRunning = true;

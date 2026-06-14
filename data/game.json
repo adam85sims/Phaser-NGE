@@ -4,8 +4,7 @@
   "version": "1.0.0",
   "startScene": "start",
   "scenes": [
-    "start",
-    "jumped"
+    "start"
   ],
   "defaults": {
     "textSpeed": 40,
@@ -13,7 +12,5 @@
     "bgmVolume": 0.7,
     "sfxVolume": 1
   },
-  "animations": [
-    "fade_and_slide"
-  ]
+  "animations": []
 }

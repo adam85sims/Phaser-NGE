@@ -14,7 +14,10 @@
       "DialogueSystem": "src/systems/DialogueSystem.js",
       "CharacterSystem": "src/systems/CharacterSystem.js",
       "SaveSystem": "src/systems/SaveSystem.js",
-      "AudioSystem": "src/systems/AudioSystem.js"
+      "AudioSystem": "src/systems/AudioSystem.js",
+      "LayerSystem": "src/systems/LayerSystem.js",
+      "Registry": "src/systems/Registry.js",
+      "CoreNodes": "src/nodes/CoreNodes.js"
     },
     "editor": {
       "app": "tools/app.js",

@@ -158,8 +158,8 @@ export class GameScene extends Phaser.Scene {
           const animKey = data.value;
           let targetObj = null;
           
-          if (this.layers.layers.has(targetId)) targetObj = this.layers.layers.get(targetId).image;
-          else if (this.characters.activeSprites.has(targetId)) targetObj = this.characters.activeSprites.get(targetId);
+          if (this.layers.layers[targetId]) targetObj = this.layers.layers[targetId];
+          else if (this.characters.activeSprites && this.characters.activeSprites.get && this.characters.activeSprites.has(targetId)) targetObj = this.characters.activeSprites.get(targetId);
           
           if (targetObj && this.sys.game.scene.keys.BootScene.Data?.animations) {
             const animData = this.sys.game.scene.keys.BootScene.Data.animations[animKey];
@@ -366,8 +366,12 @@ export class GameScene extends Phaser.Scene {
     const exts = ['mp3', 'ogg', 'wav', 'opus', 'm4a'];
 
     const tryLoad = async () => {
+      const isFullPath = key.includes('/');
+      const baseKey = isFullPath ? key : `audio/${subdir}/${key}`;
+      
+      const exts = ['mp3', 'ogg', 'wav', 'opus', 'm4a'];
       for (const ext of exts) {
-        const url = `/assets/audio/${subdir}/${key}.${ext}`;
+        const url = `/assets/${baseKey}.${ext}`;
         try {
           const r = await fetch(url, { method: 'HEAD' });
           if (!r.ok) continue;
@@ -378,7 +382,8 @@ export class GameScene extends Phaser.Scene {
           return;
         } catch { continue; }
       }
-      console.warn(`[GameScene] _loadAndPlay: could not find audio '${key}' in /assets/audio/${subdir}/`);
+      console.warn(`[GameScene] _loadAndPlay: could not find audio '${key}'`);
+      if (onReady) onReady();
     };
 
     tryLoad();

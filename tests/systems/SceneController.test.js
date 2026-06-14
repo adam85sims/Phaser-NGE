@@ -14,6 +14,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { Data } from '../../src/systems/DataLoader.js';
 import { VariableSystem } from '../../src/systems/VariableSystem.js';
 import { SceneController } from '../../src/systems/SceneController.js';
+import '../../src/nodes/CoreNodes.js';
 
 /* ── Helpers ─────────────────────────────── */
 
@@ -695,6 +696,7 @@ describe('SceneController', () => {
       expect(onAction).toHaveBeenCalledWith({
         type: 'sfx',
         value: 'explosion',
+        target: null,
         volume: null,
         addFlag: undefined,
         delta: undefined,

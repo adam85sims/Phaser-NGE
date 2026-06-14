@@ -16,8 +16,8 @@
     {
       "id": "dialogue_1",
       "type": "dialogue",
-      "x": -660,
-      "y": -40,
+      "x": -460,
+      "y": -60,
       "speaker": "narrator",
       "text": "Dave is about to have a very very bad day. [show:dave_fullbody_00001_]",
       "next": ""
@@ -25,8 +25,8 @@
     {
       "id": "show_object_1",
       "type": "show_object",
-      "x": -920,
-      "y": -80,
+      "x": -700,
+      "y": -60,
       "target": "Elena_neutral_00001_",
       "next": "dialogue_1",
       "wait": "on"
@@ -35,7 +35,7 @@
       "id": "bgIntro",
       "type": "event",
       "x": -700,
-      "y": -160,
+      "y": -180,
       "eventType": "bgm",
       "eventValue": "audio/bgm/bgm_imacomposernow",
       "next": "wait_1"
@@ -43,30 +43,20 @@
     {
       "id": "wait_1",
       "type": "wait",
-      "x": -480,
-      "y": -160,
+      "x": -460,
+      "y": -180,
       "duration": 10000,
       "next": "show_object_1"
     }
   ],
   "layers": [
     {
-      "id": "layer_1781268842093_680",
-      "asset": "backgrounds/BG_village_00001_.png",
-      "x": 0,
-      "y": 0,
-      "scale": 1,
+      "id": "layer_1781394630676_115",
+      "asset": "backgrounds/BG_throne_00001_.png",
+      "x": 640,
+      "y": 203,
+      "scale": 1.5,
       "zIndex": 1,
-      "opacity": 1,
-      "hidden": false
-    },
-    {
-      "id": "layer_1781299290231_728",
-      "asset": "characters/Marcus_stern_00001_.png",
-      "x": 0,
-      "y": 0,
-      "scale": 1,
-      "zIndex": 2,
       "opacity": 1
     }
   ]

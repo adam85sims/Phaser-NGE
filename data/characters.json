@@ -6,9 +6,6 @@
   "narrator": {
     "name": "Narrator",
     "color": "#00ccff",
-    "portraits": {
-      "neutral": "characters/Marcus_stern_00001_.png"
-    },
-    "defaultExpression": "neutral"
+    "invisible": true
   }
 }

@@ -77,6 +77,15 @@ export function render(container, app) {
         <span>Reveal in Folder</span>
       </div>
       <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+      <div class="context-menu-item" data-action="create-folder" style="padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px">
+        <span>📁</span>
+        <span>New Folder</span>
+      </div>
+      <div class="context-menu-item" data-action="create-file" style="padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px">
+        <span>📄</span>
+        <span>New Script</span>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:4px 0"></div>
       <div class="context-menu-item" data-action="delete" style="padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--danger)">
         <span>🗑️</span>
         <span>Delete</span>
@@ -280,6 +289,10 @@ function _renderFileGrid() {
       _selectFile(el.dataset.path);
       _showContextMenu(e.clientX, e.clientY, el.dataset.path);
     });
+    el.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', el.dataset.path);
+      e.dataTransfer.effectAllowed = 'copyMove';
+    });
   });
   
   _updateStatusBar();
@@ -291,7 +304,7 @@ function _renderFileCard(item) {
   const preview = _getPreview(item);
   
   return `
-    <div class="file-card ${isSelected ? 'selected' : ''}" data-path="${item.path}">
+    <div class="file-card ${isSelected ? 'selected' : ''}" data-path="${item.path}" draggable="true">
       <div class="file-preview">${preview}</div>
       <div class="file-info">
         <span class="file-icon">${icon}</span>
@@ -306,7 +319,7 @@ function _renderFileListItem(item) {
   const icon = _getFileIcon(item.name);
   
   return `
-    <div class="file-list-item ${isSelected ? 'selected' : ''}" data-path="${item.path}">
+    <div class="file-list-item ${isSelected ? 'selected' : ''}" data-path="${item.path}" draggable="true">
       <span class="file-icon">${icon}</span>
       <span class="file-name">${item.name}</span>
       <span class="file-meta text-dim">${item.type === 'folder' ? 'Folder' : _getExt(item.name)}</span>
@@ -468,6 +481,44 @@ function _bindEvents() {
   });
   
   // Buttons
+  document.getElementById('btn-create-folder')?.addEventListener('click', async () => {
+    const folderName = prompt('New folder name:');
+    if (!folderName) return;
+    const targetPath = `${_state.selectedFolder}/${folderName}`;
+    try {
+      await fetch('/api/create-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPath })
+      });
+      _buildTree().then(() => {
+        _renderTree();
+        _renderFileGrid();
+      });
+    } catch (err) {
+      alert('Error creating folder: ' + err.message);
+    }
+  });
+
+  document.getElementById('btn-create-file')?.addEventListener('click', async () => {
+    const fileName = prompt('New file name (e.g. script.js):');
+    if (!fileName) return;
+    const targetPath = `${_state.selectedFolder}/${fileName}`;
+    try {
+      await fetch('/api/create-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPath, content: '' })
+      });
+      _buildTree().then(() => {
+        _renderTree();
+        _renderFileGrid();
+      });
+    } catch (err) {
+      alert('Error creating file: ' + err.message);
+    }
+  });
+
   document.getElementById('btn-open')?.addEventListener('click', () => {
     if (_state.selectedFile) _openFile(_state.selectedFile);
   });
@@ -475,6 +526,68 @@ function _bindEvents() {
   document.getElementById('btn-reveal')?.addEventListener('click', () => {
     if (_state.selectedFile) console.log('Reveal:', _state.selectedFile);
   });
+  
+  // Drag and Drop
+  const fileGrid = document.getElementById('file-grid');
+  if (fileGrid) {
+    fileGrid.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      fileGrid.style.boxShadow = 'inset 0 0 0 2px var(--accent)';
+    });
+    fileGrid.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      fileGrid.style.boxShadow = 'none';
+    });
+    fileGrid.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      fileGrid.style.boxShadow = 'none';
+      
+      const files = e.dataTransfer.files;
+      if (!files || files.length === 0) return;
+      
+      // Auto-sort based on type if dropping in a generic directory, else use selected folder
+      let targetDir = _state.selectedFolder;
+      if (targetDir.startsWith('public/assets')) {
+        targetDir = targetDir.replace('public/assets', '');
+        if (targetDir.startsWith('/')) targetDir = targetDir.substring(1);
+      } else {
+        targetDir = ''; // Root of assets if dropped outside public/assets
+      }
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Auto sort if dropped into root assets or generic public folder
+        let finalDir = targetDir;
+        if (!finalDir || finalDir === 'public') {
+          if (file.type.startsWith('image/')) finalDir = 'backgrounds'; // or characters
+          else if (file.type.startsWith('audio/')) finalDir = 'audio/sfx'; // or bgm
+        }
+        
+        try {
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            const base64 = e.target.result;
+            await fetch('/api/upload-asset', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ targetDir: finalDir, filename: file.name, base64 })
+            });
+            // Rebuild tree after last file
+            if (i === files.length - 1) {
+              _buildTree().then(() => {
+                _renderTree();
+                _renderFileGrid();
+              });
+            }
+          };
+          reader.readAsDataURL(file);
+        } catch (err) {
+          console.error('Upload failed:', err);
+        }
+      }
+    });
+  }
   
   // Context menu items
   document.querySelectorAll('.context-menu-item').forEach(item => {
@@ -583,9 +696,51 @@ function _handleContextMenuAction(action) {
       // Future: open file explorer at file location
       break;
     case 'delete':
-      console.log('Delete:', _state.contextMenuPath);
-      // Future: show delete confirmation dialog
+      if (confirm(`Are you sure you want to delete ${_state.contextMenuPath}?`)) {
+        fetch('/api/delete-asset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetPath: _state.contextMenuPath })
+        }).then(() => {
+          _buildTree().then(() => {
+            _renderTree();
+            _renderFileGrid();
+          });
+        }).catch(err => alert('Failed to delete: ' + err.message));
+      }
       break;
+    case 'create-folder': {
+      const folderName = prompt('New folder name:');
+      if (!folderName) break;
+      const targetPath = `${_state.contextMenuPath.replace(/\\.[^/.]+$/, '')}/${folderName}`;
+      fetch('/api/create-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPath })
+      }).then(() => {
+        _buildTree().then(() => {
+          _renderTree();
+          _renderFileGrid();
+        });
+      }).catch(err => alert('Failed to create folder: ' + err.message));
+      break;
+    }
+    case 'create-file': {
+      const fileName = prompt('New file name (e.g. script.js):');
+      if (!fileName) break;
+      const targetPath = `${_state.contextMenuPath.replace(/\\.[^/.]+$/, '')}/${fileName}`;
+      fetch('/api/create-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPath, content: '' })
+      }).then(() => {
+        _buildTree().then(() => {
+          _renderTree();
+          _renderFileGrid();
+        });
+      }).catch(err => alert('Failed to create file: ' + err.message));
+      break;
+    }
   }
   
   _hideContextMenu();

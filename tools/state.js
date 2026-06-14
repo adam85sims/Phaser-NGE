@@ -126,8 +126,20 @@ export async function saveProjectToBackend() {
     await backend.saveProject(data);
     // Clear legacy local storage save so engine loads fresh disk files
     localStorage.removeItem('nge_editor_data');
+    return true;
   } catch (e) {
-    console.warn('Project save failed:', e);
+    if (e.message.startsWith('WARNINGS:')) {
+      try {
+        const warnings = JSON.parse(e.message.substring(9));
+        alert('Project saved with validation warnings:\\n\\n' + warnings.join('\\n'));
+        return false;
+      } catch (err) {}
+    } else {
+      console.warn('Project save failed:', e);
+      alert('Save failed: ' + e.message);
+      return false;
+    }
+    return false;
   }
 }
 
@@ -148,5 +160,8 @@ export function markDirty() {
 export async function forceSave() {
   clearTimeout(_saveTimer);
   _saveTimer = null;
-  await _finaliseSave();
+  const success = await saveProjectToBackend();
+  editorState.dirty = false;
+  window.dispatchEvent(new CustomEvent('editor:saved'));
+  return success;
 }

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import './nodes/CoreNodes.js';
 import { BootScene } from './scenes/BootScene.js';
 import { SplashScene } from './scenes/SplashScene.js';
 import { MenuScene } from './scenes/MenuScene.js';

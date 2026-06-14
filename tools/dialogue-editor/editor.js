@@ -538,6 +538,7 @@ function getOutputPorts(node, sx, sy, sw) {
 // ─── CANVAS INPUT ──────────────────────────────────────────
 
 function onPointerDown(e) {
+  e.stopPropagation();
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;

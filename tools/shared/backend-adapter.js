@@ -43,7 +43,19 @@ export const backend = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error('Save failed');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (err.warnings) {
+        throw new Error('WARNINGS:' + JSON.stringify(err.warnings));
+      }
+      throw new Error(err.error || 'Save failed');
+    }
+    const json = await res.json();
+    if (json.warnings && json.warnings.length > 0) {
+      console.warn('Save completed with warnings:', json.warnings);
+      // We could dispatch an event here, but throwing a specific Error format is easier for now
+      throw new Error('WARNINGS:' + JSON.stringify(json.warnings));
+    }
     return res;
   },
 

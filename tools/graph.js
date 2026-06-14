@@ -1,6 +1,6 @@
 import { editorState, markDirty } from './state.js';
+import { Registry } from '../src/systems/Registry.js';
 
-const TYPE_COLORS = { dialogue: '#3b82f6', choice: '#f59e0b', condition: '#10b981', event: '#8b5cf6', call_scene: '#ec4899', wait: '#64748b', end: '#ef4444', set_variable: '#059669', timed_choice: '#d97706', random_branch: '#6366f1', animate: '#0284c7', show_object: '#14b8a6', hide_object: '#94a3b8', camera: '#8b5cf6' };
 const NODE_W = 200, NODE_H = 64, PORT_R = 6;
 
 let canvas, ctx;
@@ -132,33 +132,8 @@ export function createNode(type = 'dialogue', wx = null, wy = null) {
     y: Math.round(wy / 20) * 20
   };
 
-  // Type-specific defaults
-  if (type === 'dialogue') {
-    node.speaker = '';
-    node.text = 'New dialogue';
-    node.next = '';
-  } else if (type === 'choice') {
-    node.prompt = '';
-    node.choices = [{ text: 'Choice 1', next: '' }];
-    node.next = '';
-  } else if (type === 'condition') {
-    node.condition = 'flag == true';
-    node.next = '';
-    node.else = '';
-  } else if (type === 'event') {
-    node.eventType = 'sfx';
-    node.eventValue = '';
-    node.next = '';
-  } else if (type === 'call_scene') {
-    node.sceneId = '';
-    node.next = '';
-  } else if (type === 'wait') {
-    node.duration = 1000;
-    node.next = '';
-  } else if (type === 'end') {
-    node.text = '';
-    node.nextScene = '';
-  }
+  const def = Registry.getNodeType(type);
+  if (def && def.defaultData) Object.assign(node, def.defaultData());
 
   if (!sceneData.nodes) sceneData.nodes = [];
   sceneData.nodes.push(node);
@@ -246,21 +221,7 @@ function showContextMenu(mx, my) {
 
   const wpos = screenToWorld(canvasX, canvasY);
 
-  const nodeTypes = [
-    { label: 'Dialogue', type: 'dialogue' },
-    { label: 'Choice', type: 'choice' },
-    { label: 'Condition', type: 'condition' },
-    { label: 'Event', type: 'event' },
-    { label: 'Wait', type: 'wait' },
-    { label: 'End Scene', type: 'end' },
-    { label: 'Set Variable', type: 'set_variable' },
-    { label: 'Timed Choice', type: 'timed_choice' },
-    { label: 'Random Branch', type: 'random_branch' },
-    { label: 'Animate', type: 'animate' },
-    { label: 'Show Object', type: 'show_object' },
-    { label: 'Hide Object', type: 'hide_object' },
-    { label: 'Camera', type: 'camera' }
-  ];
+  const nodeTypes = Registry.getAllNodeTypes().map(t => ({ label: t.label, type: t.id }));
 
   function renderList(filter = '') {
     list.innerHTML = '';
@@ -373,11 +334,11 @@ function renderCanvas() {
   // Collect connections
   const conns = [];
   getNodes().forEach(n => {
-    if (n.next) conns.push({ from: n.id, port: 0, to: n.next });
-    if (n.type === 'choice') (n.choices || []).forEach((c, i) => { if (c.next) conns.push({ from: n.id, port: i, to: c.next }); });
-    if (n.type === 'condition') {
-      if (n.next) conns.push({ from: n.id, port: 0, to: n.next, label: 'TRUE' });
-      if (n.else) conns.push({ from: n.id, port: 1, to: n.else, label: 'FALSE' });
+    const def = Registry.getNodeType(n.type);
+    if (def && def.getConnections) {
+      def.getConnections(n).forEach(c => conns.push({ from: n.id, ...c }));
+    } else {
+      if (n.next) conns.push({ from: n.id, port: 0, to: n.next });
     }
   });
 
@@ -436,7 +397,8 @@ function renderCanvas() {
     const sw = r.w * graphState.zoom;
     const sh = r.h * graphState.zoom;
     const selected = node.id === selectedNodeId;
-    const color = TYPE_COLORS[node.type] || '#666';
+    const def = Registry.getNodeType(node.type);
+    const color = def?.color || '#666';
     const radius = 6;
 
     ctx.shadowColor = selected ? 'rgba(0,204,255,0.3)' : 'rgba(0,0,0,0.3)';
@@ -498,8 +460,9 @@ function renderCanvas() {
     oports.forEach((p, i) => {
       ctx.beginPath(); ctx.arc(p.x, p.y, PORT_R * graphState.zoom, 0, Math.PI * 2);
       let pc = 'rgba(255,255,255,0.2)';
-      if (node.type === 'condition') pc = i === 0 ? '#22c55e' : '#ef4444';
-      if (node.type === 'choice') pc = '#d97706';
+      if (p.label === 'TRUE') pc = '#22c55e';
+      else if (p.label === 'FALSE') pc = '#ef4444';
+      else if (node.type === 'choice' || node.type === 'timed_choice' || node.type === 'random_branch') pc = '#d97706';
       ctx.fillStyle = pc; ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.stroke();
     });
@@ -527,33 +490,29 @@ function getNodeRect(node) {
 }
 
 function getNodeHeight(node) {
-  if (node.type === 'choice') return Math.max(NODE_H, 36 + (node.choices || []).length * 20);
-  if (node.type === 'condition' || node.type === 'event') return 54;
+  const def = Registry.getNodeType(node.type);
+  if (def && def.getHeight) return def.getHeight(node);
   return NODE_H;
 }
 
 function getPortY(node, portIdx) {
-  const h = getNodeHeight(node);
-  if (node.type === 'choice') return 14 + (portIdx || 0) * 20;
-  if (node.type === 'condition') return portIdx === 0 ? h * 0.35 : h * 0.65;
-  return h / 2;
+  const def = Registry.getNodeType(node.type);
+  if (def && def.getOutputs) {
+    const outputs = def.getOutputs(node, 0, 0, 0, 1);
+    if (outputs[portIdx]) return outputs[portIdx].y;
+  }
+  return getNodeHeight(node) / 2;
 }
 
 function getOutputPorts(node, sx, sy, sw) {
-  const ports = [];
+  const def = Registry.getNodeType(node.type);
+  if (def && def.getOutputs) return def.getOutputs(node, sx, sy, sw, graphState.zoom);
   const h = getNodeHeight(node) * graphState.zoom;
-  if (node.type === 'choice') {
-    (node.choices || []).forEach((c, i) => ports.push({ x: sx + sw, y: sy + 14 + i * 20 * graphState.zoom }));
-  } else if (node.type === 'condition') {
-    ports.push({ x: sx + sw, y: sy + h * 0.35 });
-    ports.push({ x: sx + sw, y: sy + h * 0.65 });
-  } else if (node.type !== 'end') {
-    ports.push({ x: sx + sw, y: sy + h / 2 });
-  }
-  return ports;
+  return [{ x: sx + sw, y: sy + h / 2 }];
 }
 
 function onPointerDown(e) {
+  e.stopPropagation();
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;

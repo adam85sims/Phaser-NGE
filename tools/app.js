@@ -1,4 +1,5 @@
 import { editorState, loadProjectData, markDirty, forceSave } from './state.js';
+import '../src/nodes/CoreNodes.js';
 
 // ── Boot ───────────────────────────────────────────────
 async function boot() {
@@ -15,8 +16,11 @@ async function boot() {
   renderScenePreview();
   
   // Bind topbar actions
-  document.getElementById('btn-play')?.addEventListener('click', () => {
-    window.open('/', '_blank');
+  document.getElementById('btn-play')?.addEventListener('click', async () => {
+    const success = await forceSave();
+    if (success) {
+      window.open('/', '_blank');
+    }
   });
 
   window.addEventListener('editor:render', () => {
@@ -24,6 +28,10 @@ async function boot() {
     renderInspector();
     renderScenePreview();
     // Don't re-render workspace, as it would destroy the canvas
+  });
+
+  window.addEventListener('scene:preview', () => {
+    renderScenePreview();
   });
 
   // inspector:refresh re-renders just the inspector (e.g. event type change swaps value fields)
@@ -54,10 +62,10 @@ async function boot() {
   });
 
   // Gizmo Toolbar Setup
-  ['pan', 'select', 'move', 'rotate', 'scale'].forEach(mode => {
+  ['pan', 'select', 'move', 'rotate', 'scale', 'origin'].forEach(mode => {
     document.getElementById(`tool-${mode}`)?.addEventListener('click', () => {
       editorState.toolMode = mode;
-      ['pan', 'select', 'move', 'rotate', 'scale'].forEach(m => {
+      ['pan', 'select', 'move', 'rotate', 'scale', 'origin'].forEach(m => {
         document.getElementById(`tool-${m}`)?.classList.toggle('active', m === mode);
       });
       renderScenePreview();
@@ -87,9 +95,11 @@ async function boot() {
   // Play from node hook
   window.__playFromNode = (nodeId) => {
     if (editorState.activeSceneId) {
-      forceSave().then(() => {
-        localStorage.setItem('nge_debug_start', JSON.stringify({ sceneId: editorState.activeSceneId, nodeId }));
-        window.open('/', '_blank');
+      forceSave().then((success) => {
+        if (success) {
+          localStorage.setItem('nge_debug_start', JSON.stringify({ sceneId: editorState.activeSceneId, nodeId }));
+          window.open('/', '_blank');
+        }
       });
     }
   };
@@ -139,22 +149,40 @@ function renderOutline() {
   html += `
     <div class="outline-section-header" style="display:flex;align-items:center;gap:4px;padding:4px 6px;margin-top:4px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border);">
       <span>🎨 Objects</span>
-      <button class="icon-btn-sm" data-add-layer="background" title="Add Background" style="margin-left:auto;padding:2px 4px">+</button>
+      <button class="icon-btn-sm" data-add-layer="container" title="Add Container" style="margin-left:auto;padding:2px 4px">📁</button>
+      <button class="icon-btn-sm" data-add-layer="background" title="Add Background" style="padding:2px 4px">+</button>
     </div>
   `;
 
   const sceneData = editorState.scenes[sceneId];
   if (sceneData && sceneData.layers && sceneData.layers.length > 0) {
-    sceneData.layers.forEach(layer => {
+    const renderNode = (layer, depth = 0) => {
       const layerSelected = editorState.selectedItemId === layer.id && editorState.selectedItemType === 'layer';
-      const icon = layer.type === 'background' ? '🖼️' : layer.type === 'character' ? '👤' : '📦';
+      const isContainer = layer.type === 'container';
+      const icon = isContainer ? '📁' : (layer.type === 'background' ? '🖼️' : '📦');
       const eyeIcon = layer.hidden ? '👁️‍🗨️' : '👁️';
       const opacity = layer.hidden ? '0.5' : '1';
-      html += `<div class="tree-item ${layerSelected ? 'selected' : ''}" data-layer="${layer.id}" data-type="layer" style="opacity:${opacity}; padding-right: 4px;">
+      
+      let nodeHtml = `<div class="tree-item ${layerSelected ? 'selected' : ''}" 
+        data-layer="${layer.id}" 
+        data-type="layer" 
+        draggable="true"
+        style="opacity:${opacity}; padding-right: 4px; padding-left: ${8 + depth * 12}px;">
         <span style="color:var(--text-dim);font-size:9px;width:14px">${icon}</span>
-        <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;">${layer.asset || layer.characterId || layer.id}</span>
+        <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;">${layer.asset || layer.id}</span>
         <button class="icon-btn-sm toggle-visibility" data-toggle-visibility="${layer.id}" title="Toggle Visibility" style="padding:0 4px;background:none;border:none;cursor:pointer;">${eyeIcon}</button>
       </div>`;
+      
+      if (isContainer && layer.children) {
+        layer.children.forEach(child => {
+          nodeHtml += renderNode(child, depth + 1);
+        });
+      }
+      return nodeHtml;
+    };
+    
+    sceneData.layers.forEach(layer => {
+      html += renderNode(layer);
     });
   } else {
     html += `<div class="text-dim" style="font-size:10px;padding:8px 6px;opacity:0.5">No objects — drag assets to scene</div>`;
@@ -192,14 +220,61 @@ function renderOutline() {
 
   // Add layer button
   body.querySelectorAll('[data-add-layer]').forEach(el => {
-    el.addEventListener('click', (e) => {
+    el.addEventListener('click', async (e) => {
       e.stopPropagation();
       const layerType = el.dataset.addLayer;
       if (layerType === 'background') {
         // Open asset browser to backgrounds
         const assetTab = document.querySelector('[data-filter="backgrounds"]');
         if (assetTab) assetTab.click();
+      } else if (layerType === 'container') {
+        const mod = await import('./views/scene-composer.js');
+        mod.addContainerLayer();
+        markDirty();
+        renderOutline();
       }
+    });
+  });
+
+  // Drag and Drop reordering and parenting
+  let draggedLayerId = null;
+
+  body.querySelectorAll('.tree-item[data-type="layer"]').forEach(el => {
+    el.addEventListener('dragstart', (e) => {
+      draggedLayerId = el.dataset.layer;
+      e.dataTransfer.effectAllowed = 'move';
+      e.target.style.opacity = '0.5';
+    });
+
+    el.addEventListener('dragend', (e) => {
+      e.target.style.opacity = '';
+      body.querySelectorAll('.tree-item').forEach(n => n.classList.remove('drag-over'));
+      draggedLayerId = null;
+    });
+
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    });
+
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drag-over');
+    });
+
+    el.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('drag-over');
+      
+      const targetLayerId = el.dataset.layer;
+      if (!draggedLayerId || draggedLayerId === targetLayerId) return;
+
+      const mod = await import('./views/scene-composer.js');
+      mod.reparentLayer(draggedLayerId, targetLayerId);
+      markDirty();
+      renderOutline();
+      renderScenePreview();
     });
   });
 }
@@ -373,20 +448,45 @@ function renderScenePreview() {
           <div style="position:absolute; left:50%; top:-20px; width:1px; height:20px; background:var(--accent); pointer-events:none; transform: scaleY(${invScale}); transform-origin: bottom;"></div>
           <div class="gizmo-handle rotate-handle" style="${hStyle} left:50%; top:-20px; margin-left:-5px; margin-top:-5px; cursor:crosshair"></div>
         `;
+      } else if (editorState.toolMode === 'origin') {
+        const originX = layer.originX ?? 0.5;
+        const originY = layer.originY ?? 0.5;
+        const originXPct = Math.round(originX * 100);
+        const originYPct = Math.round(originY * 100);
+        const originHandleStyle = `position:absolute; width:12px; height:12px; background:#ff6b6b; border:2px solid #fff; border-radius:50%; pointer-events:auto; transform: translate(-50%, -50%) scale(${invScale}); box-shadow: 0 0 4px rgba(0,0,0,0.5); cursor: move;`;
+        handlesHTML += `
+          <div class="gizmo-handle origin-handle" data-layer-id="${layer.id}" style="${originHandleStyle} left:${originXPct}%; top:${originYPct}%"></div>
+          <div style="position:absolute; left:${originXPct}%; top:${originYPct}%; width:1px; height:100%; background:rgba(255,107,107,0.3); pointer-events:none; transform: translateX(-50%);"></div>
+          <div style="position:absolute; left:${originXPct}%; top:${originYPct}%; width:100%; height:1px; background:rgba(255,107,107,0.3); pointer-events:none; transform: translateY(-50%);"></div>
+        `;
+      } else if (editorState.toolMode === 'move') {
+        const hStyleX = `position:absolute; width:30px; height:6px; background:#ff3366; pointer-events:auto; transform: scale(${invScale}); cursor: ew-resize; border-radius:3px;`;
+        const hStyleY = `position:absolute; width:6px; height:30px; background:#33cc66; pointer-events:auto; transform: scale(${invScale}); cursor: ns-resize; border-radius:3px;`;
+        handlesHTML += `
+          <div class="gizmo-handle move-x-handle" data-layer-id="${layer.id}" data-axis="x" style="${hStyleX} left:50%; top:50%; margin-top:-3px;"></div>
+          <div class="gizmo-handle move-y-handle" data-layer-id="${layer.id}" data-axis="y" style="${hStyleY} left:50%; top:50%; margin-left:-3px; margin-top:-30px;"></div>
+        `;
       }
     }
 
     let boxStyle = 'position:absolute;inset:0; ';
+    const isGizmoTool = ['move', 'scale', 'rotate', 'origin'].includes(editorState.toolMode);
+    
     if (isSelected) {
-      boxStyle += `border:1px solid var(--accent); ${editorState.toolMode === 'move' ? 'pointer-events:auto; cursor:move;' : 'pointer-events:none;'}`;
-    } else if (editorState.toolMode === 'select') {
-      boxStyle += 'pointer-events:auto; cursor:pointer;';
+      boxStyle += `border:1px solid var(--accent); ${isGizmoTool ? 'pointer-events:auto; cursor:move;' : (editorState.toolMode === 'select' ? 'pointer-events:auto; cursor:pointer;' : 'pointer-events:none;')}`;
     } else {
-      boxStyle += 'pointer-events:none;';
+      if (editorState.toolMode === 'select' || isGizmoTool) {
+        boxStyle += 'pointer-events:auto; cursor:pointer;';
+      } else {
+        boxStyle += 'pointer-events:none;';
+      }
     }
 
+    const originX = layer.originX ?? 0.5;
+    const originY = layer.originY ?? 0.5;
+
     return `
-      <div class="scene-layer-wrapper" data-layer-id="${layer.id}" style="position:absolute;left:0;top:0;opacity:${opacity};${displayStyle}z-index:${z};transform:translate(calc(${x}px - 50%), calc(${y}px - 50%)) scale(${scale}) rotate(${rot}deg);transform-origin:center center; display:inline-block;">
+      <div class="scene-layer-wrapper" data-layer-id="${layer.id}" style="position:absolute;left:0;top:0;opacity:${opacity};${displayStyle}z-index:${z};transform:translate(calc(${x}px - ${originX * 100}%), calc(${y}px - ${originY * 100}%)) scale(${scale}) rotate(${rot}deg);transform-origin:center center; display:inline-block;">
         <img src="/assets/${layer.asset}" onerror="this.style.display='none'" style="display:block; pointer-events:none;" />
         <div class="gizmo-box" data-layer-id="${layer.id}" style="${boxStyle}">
           ${handlesHTML}
@@ -514,7 +614,7 @@ function renderScenePreview() {
           </div>
 
           <!-- Drop zone overlay -->
-          <div id="scene-drop-overlay" style="position:absolute;inset:0;border:2px dashed transparent;transition:border-color 0.15s,background-color 0.15s;pointer-events:auto;display:flex;align-items:center;justify-content:center;z-index:100">
+          <div id="scene-drop-overlay" style="position:absolute;inset:0;border:2px dashed transparent;transition:border-color 0.15s,background-color 0.15s;pointer-events:none;display:flex;align-items:center;justify-content:center;z-index:100">
             <div id="scene-drop-hint" style="background:var(--accent);color:#000;padding:8px 16px;border-radius:6px;font-weight:bold;font-size:13px;opacity:0;transform:scale(0.9);transition:all 0.15s;pointer-events:none">+ DROP HERE</div>
           </div>
 
@@ -528,10 +628,11 @@ function renderScenePreview() {
   // ── Event bindings ──
 
   // Drop zone
+  const sceneViewport = document.getElementById('scene-viewport');
   const dropOverlay = document.getElementById('scene-drop-overlay');
   const dropHint = document.getElementById('scene-drop-hint');
-  if (dropOverlay && dropHint) {
-    dropOverlay.addEventListener('dragover', (e) => {
+  if (sceneViewport && dropOverlay && dropHint) {
+    sceneViewport.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
       dropOverlay.style.borderColor = 'var(--accent)';
@@ -539,15 +640,15 @@ function renderScenePreview() {
       dropHint.style.opacity = '1';
       dropHint.style.transform = 'scale(1)';
     });
-    dropOverlay.addEventListener('dragleave', (e) => {
-      if (!dropOverlay.contains(e.relatedTarget)) {
+    sceneViewport.addEventListener('dragleave', (e) => {
+      if (!sceneViewport.contains(e.relatedTarget)) {
         dropOverlay.style.borderColor = 'transparent';
         dropOverlay.style.backgroundColor = 'transparent';
         dropHint.style.opacity = '0';
         dropHint.style.transform = 'scale(0.9)';
       }
     });
-    dropOverlay.addEventListener('drop', (e) => {
+    sceneViewport.addEventListener('drop', (e) => {
       e.preventDefault();
       dropOverlay.style.borderColor = 'transparent';
       dropOverlay.style.backgroundColor = 'transparent';
@@ -559,7 +660,7 @@ function renderScenePreview() {
         const dragData = JSON.parse(dragDataStr || '{}');
         // Scene canvas accepts any image drop.
         if (dragData.type === 'image' && dragData.path) {
-import('./views/scene-composer.js').then(mod => {
+          import('./views/scene-composer.js').then(mod => {
             const layer = mod.handleAssetDrop(dragData.path);
             if (layer) {
               editorState.selectedItemId = layer.id;
@@ -599,32 +700,42 @@ import('./views/scene-composer.js').then(mod => {
     if (e.button !== 0) return;
 
     // 2. Select mode handling
-    if (editorState.toolMode === 'select' && e.target.classList.contains('gizmo-box')) {
+    const isGizmoMode = ['move', 'scale', 'rotate', 'origin'].includes(editorState.toolMode);
+    if ((editorState.toolMode === 'select' || isGizmoMode) && e.target.classList.contains('gizmo-box')) {
       const layerId = e.target.getAttribute('data-layer-id');
       if (layerId && editorState.selectedItemId !== layerId) {
         editorState.selectedItemId = layerId;
         editorState.selectedItemType = 'layer';
-        renderUI();
-        return;
+        renderScenePreview();
+        renderOutline();
+        renderInspector();
+        
+        // If we're in a gizmo mode, we probably want to fall through to start dragging immediately
+        if (editorState.toolMode === 'select') return;
       }
     }
 
     // 3. Gizmo handling
-    const isMove = e.target.classList.contains('gizmo-box') && editorState.toolMode === 'move';
+    const isMoveBox = e.target.classList.contains('gizmo-box') && editorState.toolMode === 'move';
+    const isMoveX = e.target.classList.contains('move-x-handle');
+    const isMoveY = e.target.classList.contains('move-y-handle');
+    const isMove = isMoveBox || isMoveX || isMoveY;
     const isScale = e.target.classList.contains('scale-handle');
     const isRotate = e.target.classList.contains('rotate-handle');
+    const isOrigin = e.target.classList.contains('origin-handle');
 
-    if (isMove || isScale || isRotate) {
+    if (isMove || isScale || isRotate || isOrigin) {
       e.preventDefault();
       e.stopPropagation();
       
-      const layerId = isMove ? e.target.getAttribute('data-layer-id') : e.target.closest('.scene-layer-wrapper').getAttribute('data-layer-id');
+      const layerId = isMoveBox ? e.target.getAttribute('data-layer-id') : e.target.closest('.scene-layer-wrapper').getAttribute('data-layer-id');
       const sceneData = editorState.scenes[editorState.activeSceneId];
       const layer = sceneData?.layers?.find(l => l.id === layerId);
       if (!layer) return;
 
       activeGizmo = {
-        type: isMove ? 'move' : (isScale ? 'scale' : 'rotate'),
+        type: isMove ? 'move' : (isScale ? 'scale' : (isRotate ? 'rotate' : 'origin')),
+        axis: isMoveX ? 'x' : (isMoveY ? 'y' : 'all'),
         layerId,
         layer,
         startX: e.clientX,
@@ -633,6 +744,8 @@ import('./views/scene-composer.js').then(mod => {
         initY: layer.y ?? 0,
         initScale: layer.scale ?? 1,
         initRot: layer.rotation ?? 0,
+        initOriginX: layer.originX ?? 0.5,
+        initOriginY: layer.originY ?? 0.5,
         corner: e.target.getAttribute('data-corner')
       };
       
@@ -664,14 +777,29 @@ import('./views/scene-composer.js').then(mod => {
           nx = Math.round(nx / 10) * 10;
           ny = Math.round(ny / 10) * 10;
         }
-        l.x = nx;
-        l.y = ny;
+        if (activeGizmo.axis === 'x') {
+          l.x = nx;
+        } else if (activeGizmo.axis === 'y') {
+          l.y = ny;
+        } else {
+          l.x = nx;
+          l.y = ny;
+        }
+        
+        // Continuous resizing Inspector sync
+        const inputX = document.querySelector('input[data-field="x"][data-layer="true"]');
+        const inputY = document.querySelector('input[data-field="y"][data-layer="true"]');
+        if (inputX) inputX.value = l.x;
+        if (inputY) inputY.value = l.y;
       } else if (activeGizmo.type === 'scale') {
         const corner = activeGizmo.corner;
         const dir = (corner === 'tr' || corner === 'br') ? 1 : -1;
         let ns = activeGizmo.initScale + (dx * dir * 0.01);
         if (editorState.snapEnabled) ns = Math.round(ns * 10) / 10;
         l.scale = ns;
+        
+        const inputScale = document.querySelector('input[data-field="scale"][data-layer="true"]');
+        if (inputScale) inputScale.value = Number(l.scale).toFixed(2);
       } else if (activeGizmo.type === 'rotate') {
         const angle1 = Math.atan2(activeGizmo.startY - activeGizmo.centerY, activeGizmo.startX - activeGizmo.centerX);
         const angle2 = Math.atan2(e.clientY - activeGizmo.centerY, e.clientX - activeGizmo.centerX);
@@ -679,10 +807,78 @@ import('./views/scene-composer.js').then(mod => {
         let nr = activeGizmo.initRot + dAngle;
         if (editorState.snapEnabled) nr = Math.round(nr / 15) * 15;
         l.rotation = nr;
+        
+        const inputRot = document.querySelector('input[data-field="rotation"][data-layer="true"]');
+        if (inputRot) inputRot.value = Math.round(l.rotation);
+      } else if (activeGizmo.type === 'origin') {
+        // Calculate new origin position relative to the layer's bounding box
+        const layerEl = document.querySelector(`.scene-layer-wrapper[data-layer-id="${activeGizmo.layerId}"]`);
+        if (layerEl) {
+          const rect = layerEl.getBoundingClientRect();
+          const localX = (e.clientX - rect.left) / editorState.previewZoom;
+          const localY = (e.clientY - rect.top) / editorState.previewZoom;
+          const imgWidth = layerEl.querySelector('img')?.naturalWidth || rect.width / editorState.previewZoom;
+          const imgHeight = layerEl.querySelector('img')?.naturalHeight || rect.height / editorState.previewZoom;
+          let newOriginX = localX / imgWidth;
+          let newOriginY = localY / imgHeight;
+          if (editorState.snapEnabled) {
+            newOriginX = Math.round(newOriginX * 4) / 4; // Snap to 0, 0.25, 0.5, 0.75, 1
+            newOriginY = Math.round(newOriginY * 4) / 4;
+          }
+          newOriginX = Math.max(0, Math.min(1, newOriginX));
+          newOriginY = Math.max(0, Math.min(1, newOriginY));
+          l.originX = newOriginX;
+          l.originY = newOriginY;
+          
+          const inputOx = document.querySelector('input[data-field="originX"][data-layer="true"]');
+          const inputOy = document.querySelector('input[data-field="originY"][data-layer="true"]');
+          if (inputOx) inputOx.value = Number(l.originX).toFixed(2);
+          if (inputOy) inputOy.value = Number(l.originY).toFixed(2);
+        }
       }
-      
-      renderScenePreview();
-    } else {
+        // Update inline styles instead of full renderScenePreview()
+        const layerEl = document.querySelector(`.scene-layer-wrapper[data-layer-id="${activeGizmo.layerId}"]`);
+        if (layerEl) {
+          const ox = l.originX ?? 0.5;
+          const oy = l.originY ?? 0.5;
+          layerEl.style.transform = `translate(calc(${l.x}px - ${ox * 100}%), calc(${l.y}px - ${oy * 100}%)) scale(${l.scale}) rotate(${l.rotation}deg)`;
+          
+          if (activeGizmo.type === 'origin') {
+            const originXPct = Math.round(l.originX * 100);
+            const originYPct = Math.round(l.originY * 100);
+            const originHandle = layerEl.querySelector('.origin-handle');
+            if (originHandle) {
+              originHandle.style.left = `${originXPct}%`;
+              originHandle.style.top = `${originYPct}%`;
+              // Also update the lines
+              const vLine = originHandle.nextElementSibling;
+              const hLine = vLine?.nextElementSibling;
+              if (vLine) { vLine.style.left = `${originXPct}%`; vLine.style.top = `${originYPct}%`; }
+              if (hLine) { hLine.style.left = `${originXPct}%`; hLine.style.top = `${originYPct}%`; }
+            }
+          }
+        }
+        
+        // Live sync inspector values if inspector is open
+        if (editorState.selectedItemId === activeGizmo.layerId) {
+          const inspectorPane = document.querySelector('#inspector .panel-body');
+          if (inspectorPane) {
+            const xInput = inspectorPane.querySelector('input[data-field="x"]');
+            const yInput = inspectorPane.querySelector('input[data-field="y"]');
+            const scaleInput = inspectorPane.querySelector('input[data-field="scale"]');
+            const rotInput = inspectorPane.querySelector('input[data-field="rotation"]');
+            const originXInput = inspectorPane.querySelector('input[data-field="originX"]');
+            const originYInput = inspectorPane.querySelector('input[data-field="originY"]');
+            
+            if (xInput && activeGizmo.type === 'move') xInput.value = l.x;
+            if (yInput && activeGizmo.type === 'move') yInput.value = l.y;
+            if (scaleInput && activeGizmo.type === 'scale') scaleInput.value = l.scale;
+            if (rotInput && activeGizmo.type === 'rotate') rotInput.value = l.rotation;
+            if (originXInput && activeGizmo.type === 'origin') originXInput.value = l.originX;
+            if (originYInput && activeGizmo.type === 'origin') originYInput.value = l.originY;
+          }
+        }
+      } else {
       // Mouse position tracker
       const sViewport = document.getElementById('scene-viewport');
       const posDisplay = document.getElementById('cursor-pos-display');
@@ -704,7 +900,9 @@ import('./views/scene-composer.js').then(mod => {
     if (activeGizmo) {
       activeGizmo = null;
       markDirty();
-      renderUI(); // Full refresh to update inspector
+      renderScenePreview();
+      renderOutline();
+      renderInspector();
     }
   });
 
@@ -921,26 +1119,54 @@ function _renderSceneMode(container) {
     </div>
     <div id="scene-toolbar">
       <div class="tool-group">
-        <button class="icon-btn" title="Pan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
-        <button class="icon-btn" title="Select"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4z"/></svg></button>
-        <button class="icon-btn" title="Move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M12 2l-4 4M12 2l4 4M2 12l4-4M2 12l4 4M22 12l-4-4M22 12l-4 4M12 22l-4-4M12 22l4-4"/></svg></button>
+        <button class="icon-btn ${editorState.toolMode === 'pan' ? 'active' : ''}" data-tool="pan" title="Pan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
+        <button class="icon-btn ${editorState.toolMode === 'select' ? 'active' : ''}" data-tool="select" title="Select"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4z"/></svg></button>
+        <button class="icon-btn ${editorState.toolMode === 'move' ? 'active' : ''}" data-tool="move" title="Move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M12 2l-4 4M12 2l4 4M2 12l4-4M2 12l4 4M22 12l-4-4M22 12l-4 4M12 22l-4-4M12 22l4-4"/></svg></button>
       </div>
       <div class="tool-sep"></div>
       <div class="tool-group">
-        <button class="icon-btn" title="Rotate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round"/></svg></button>
-        <button class="icon-btn" title="Scale"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h7v2H5v5H3V3zm11 0h7v7h-2V5h-5V3zM3 14h2v5h5v2H3v-7zm16 0h2v7h-7v-2h5v-5z"/></svg></button>
-        <button class="icon-btn" title="Grid Snap"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg></button>
+        <button class="icon-btn ${editorState.toolMode === 'rotate' ? 'active' : ''}" data-tool="rotate" title="Rotate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round"/></svg></button>
+        <button class="icon-btn ${editorState.toolMode === 'scale' ? 'active' : ''}" data-tool="scale" title="Scale"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h7v2H5v5H3V3zm11 0h7v7h-2V5h-5V3zM3 14h2v5h5v2H3v-7zm16 0h2v7h-7v-2h5v-5z"/></svg></button>
+        <button class="icon-btn ${editorState.toolMode === 'origin' ? 'active' : ''}" data-tool="origin" title="Origin"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4m-10-10h4m12 0h4" stroke="currentColor" stroke-width="2"/></svg></button>
+        <button class="icon-btn ${editorState.snapEnabled ? 'active' : ''}" data-tool="snap" title="Grid Snap"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg></button>
       </div>
       <div class="tool-sep"></div>
       <div class="tool-group">
-        <button class="icon-btn" title="Zoom Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"/></svg></button>
-        <button class="icon-btn" title="Zoom In"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/></svg></button>
-        <button class="icon-btn" title="Reset View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg></button>
-        <button class="icon-btn" title="Volume"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg></button>
+        <button class="icon-btn" data-tool="zoom-out" title="Zoom Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"/></svg></button>
+        <button class="icon-btn" data-tool="zoom-in" title="Zoom In"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/></svg></button>
+        <button class="icon-btn" data-tool="zoom-reset" title="Reset View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg></button>
       </div>
     </div>
   `;
   
+  // Bind toolbar clicks
+  const tb = container.querySelector('#scene-toolbar');
+  if (tb) {
+    tb.addEventListener('click', (e) => {
+      const btn = e.target.closest('.icon-btn');
+      if (!btn) return;
+      const tool = btn.dataset.tool;
+      if (['pan', 'select', 'move', 'rotate', 'scale', 'origin'].includes(tool)) {
+        editorState.toolMode = tool;
+        renderSceneMode();
+      } else if (tool === 'snap') {
+        editorState.snapEnabled = !editorState.snapEnabled;
+        renderSceneMode();
+      } else if (tool === 'zoom-in') {
+        editorState.previewZoom = Math.min(2, editorState.previewZoom + 0.1);
+        renderScenePreview();
+      } else if (tool === 'zoom-out') {
+        editorState.previewZoom = Math.max(0.2, editorState.previewZoom - 0.1);
+        renderScenePreview();
+      } else if (tool === 'zoom-reset') {
+        editorState.previewZoom = 1;
+        editorState.previewPanX = 0;
+        editorState.previewPanY = 0;
+        renderScenePreview();
+      }
+    });
+  }
+
   // Render scene preview with background
   renderScenePreview();
 }

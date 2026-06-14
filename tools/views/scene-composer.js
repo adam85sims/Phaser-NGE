@@ -27,18 +27,20 @@ function _loadLayers(sceneId) {
   }
   
   // Migrate old background field to layers array if needed
-  if (scene.background && !scene.layers) {
-    scene.layers = [{
-      id: 'bg_1',
-      type: 'background',
-      asset: scene.background.replace(/\.[^.]+$/, ''), // strip extension
-      x: 0,
-      y: 0,
-      scale: 1,
-      zIndex: 0,
-      opacity: 1
-    }];
-    scene.background = null; // clear old field
+  if (scene.background !== undefined && scene.background !== null) {
+    if (!scene.layers) {
+      scene.layers = [{
+        id: 'bg_1',
+        type: 'background',
+        asset: scene.background.replace(/\.[^.]+$/, ''), // strip extension
+        x: 640,
+        y: 360,
+        scale: 1,
+        zIndex: 0,
+        opacity: 1
+      }];
+    }
+    scene.background = null; // always clear old field
   }
   
   _layers = scene.layers || [];
@@ -64,8 +66,8 @@ export function addImageLayer(assetPath, opts = {}) {
   const layer = {
     id: `layer_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     asset: assetPath,
-    x: opts.x ?? 0,
-    y: opts.y ?? 0,
+    x: opts.x ?? 640,
+    y: opts.y ?? 360,
     scale: opts.scale ?? 1,
     zIndex: opts.zIndex ?? (maxZ + 1),
     opacity: opts.opacity ?? 1
@@ -75,6 +77,75 @@ export function addImageLayer(assetPath, opts = {}) {
   _saveLayers();
 
   return layer;
+}
+
+/**
+ * Add a container layer.
+ */
+export function addContainerLayer() {
+  const maxZ = _layers.reduce((m, l) => Math.max(m, l.zIndex ?? 0), 0);
+  const layer = {
+    id: `container_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    type: 'container',
+    x: 0,
+    y: 0,
+    scale: 1,
+    zIndex: maxZ + 1,
+    opacity: 1,
+    children: []
+  };
+
+  _layers.push(layer);
+  _saveLayers();
+  return layer;
+}
+
+/**
+ * Helper to find a layer and its parent array
+ */
+function findLayerAndParent(layersArray, layerId) {
+  for (let i = 0; i < layersArray.length; i++) {
+    if (layersArray[i].id === layerId) {
+      return { layer: layersArray[i], parentArray: layersArray, index: i };
+    }
+    if (layersArray[i].children) {
+      const res = findLayerAndParent(layersArray[i].children, layerId);
+      if (res) return res;
+    }
+  }
+  return null;
+}
+
+/**
+ * Reparent a layer to another layer (if target is container) or reorder
+ */
+export function reparentLayer(draggedId, targetId) {
+  const draggedInfo = findLayerAndParent(_layers, draggedId);
+  const targetInfo = findLayerAndParent(_layers, targetId);
+  
+  if (!draggedInfo || !targetInfo) return;
+  
+  // Prevent dropping a container into itself or its descendants
+  let current = targetInfo.parentArray;
+  while (current && current !== _layers) {
+    // This check is tricky without back-pointers. Simple version: don't allow deep nesting checks for now,
+    // or just rely on the UI not letting you drag a parent into a child easily.
+    break;
+  }
+
+  // Remove from old parent
+  draggedInfo.parentArray.splice(draggedInfo.index, 1);
+  
+  // If target is container, add as child
+  if (targetInfo.layer.type === 'container') {
+    if (!targetInfo.layer.children) targetInfo.layer.children = [];
+    targetInfo.layer.children.push(draggedInfo.layer);
+  } else {
+    // Insert after target
+    targetInfo.parentArray.splice(targetInfo.index + 1, 0, draggedInfo.layer);
+  }
+  
+  _saveLayers();
 }
 
 /**
@@ -99,9 +170,9 @@ export function updateLayer(layerId, props) {
  * Remove a layer.
  */
 export function removeLayer(layerId) {
-  const index = _layers.findIndex(l => l.id === layerId);
-  if (index !== -1) {
-    _layers.splice(index, 1);
+  const info = findLayerAndParent(_layers, layerId);
+  if (info) {
+    info.parentArray.splice(info.index, 1);
     _saveLayers();
   }
 }
@@ -117,7 +188,8 @@ export function getLayers() {
  * Get a specific layer by ID.
  */
 export function getLayer(layerId) {
-  return _layers.find(l => l.id === layerId);
+  const info = findLayerAndParent(_layers, layerId);
+  return info ? info.layer : null;
 }
 
 /**

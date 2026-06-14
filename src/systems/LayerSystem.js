@@ -38,59 +38,61 @@ export class LayerSystem {
       return;
     }
 
-    // Sort layers by zIndex to add them in the correct order
+    // Sort top-level layers by zIndex
     const sortedLayers = [...data].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
 
     let hasBackground = false;
 
-    sortedLayers.forEach(layerConf => {
-      if (!layerConf.asset) return;
+    const buildTree = (layers, parentContainer) => {
+      layers.forEach(layerConf => {
+        let obj = null;
 
-      let texKey = layerConf.asset;
+        if (layerConf.type === 'container' || layerConf.children) {
+          // It's a Container
+          obj = this.scene.add.container(layerConf.x || 0, layerConf.y || 0);
+          if (layerConf.scale !== undefined) obj.setScale(layerConf.scale);
+          if (layerConf.rotation !== undefined) obj.setAngle(layerConf.rotation);
+          
+          if (layerConf.hidden) obj.setAlpha(0);
+          else if (layerConf.opacity !== undefined) obj.setAlpha(layerConf.opacity);
+          
+          // Build children
+          if (layerConf.children && layerConf.children.length > 0) {
+            buildTree(layerConf.children, obj);
+          }
+        } else if (layerConf.asset) {
+          // It's an Image
+          const texKey = layerConf.asset;
+          if (layerConf.type === 'background') hasBackground = true;
 
-      if (layerConf.type === 'background') {
-         hasBackground = true;
-      }
+          if (this.scene.textures.exists(texKey)) {
+            const originX = layerConf.originX !== undefined ? layerConf.originX : 0.5;
+            const originY = layerConf.originY !== undefined ? layerConf.originY : 0.5;
+            obj = this.scene.add.image(layerConf.x || 0, layerConf.y || 0, texKey).setOrigin(originX, originY);
+            if (layerConf.scale !== undefined) obj.setScale(layerConf.scale);
+            if (layerConf.rotation !== undefined) obj.setAngle(layerConf.rotation);
+            if (layerConf.hidden) obj.setAlpha(0);
+            else if (layerConf.opacity !== undefined) obj.setAlpha(layerConf.opacity);
+            obj.assetName = layerConf.asset;
+          } else {
+            console.warn(`Layer asset not found: ${texKey}`);
+          }
+        }
 
-      if (this.scene.textures.exists(texKey)) {
-        this._createLayerImage(layerConf, texKey);
-      } else {
-        console.warn(`Layer asset not found: ${texKey}`);
-      }
-    });
+        if (obj) {
+          obj.zIndex = layerConf.zIndex || 0;
+          obj.layerId = layerConf.id;
+          parentContainer.add(obj);
+          this.layers[layerConf.id] = obj;
+        }
+      });
+    };
+
+    buildTree(sortedLayers, this.container);
 
     if (!hasBackground) {
       this._drawFallbackGradient();
     }
-  }
-
-  _createLayerImage(layerConf, texKey) {
-    const x = layerConf.x || 0;
-    const y = layerConf.y || 0;
-    
-    // Set origin to top-left to match the editor DOM preview exactly
-    const img = this.scene.add.image(x, y, texKey).setOrigin(0.5, 0.5);
-    
-    if (layerConf.scale !== undefined) {
-       img.setScale(layerConf.scale);
-    }
-    
-    if (layerConf.rotation !== undefined) {
-       img.setAngle(layerConf.rotation);
-    }
-
-    if (layerConf.hidden) {
-       img.setAlpha(0);
-    } else if (layerConf.opacity !== undefined) {
-       img.setAlpha(layerConf.opacity);
-    }
-    
-    img.zIndex = layerConf.zIndex || 0;
-    img.layerId = layerConf.id;
-    img.assetName = layerConf.asset;
-    
-    this.container.add(img);
-    this.layers[layerConf.id] = img;
   }
 
   /** Gets a specific layer sprite by ID */
@@ -181,6 +183,7 @@ export class LayerSystem {
     
     // Store as a generic background so it gets cleared properly
     this.container.add(graphics);
+    this.container.sendToBack(graphics);
     this.fallbackGraphics = graphics;
   }
 

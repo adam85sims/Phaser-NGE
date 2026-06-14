@@ -7,9 +7,21 @@ import { Data } from './DataLoader.js';
  */
 export class VariableSystem {
   constructor() {
-    this.vars = {};
+    this.scopes = [{}]; // Index 0 is global scope
     this.listeners = [];  // [{ varName, callback }]
     this._initFromData();
+  }
+
+  /* ── Scoping ──────────────────────────────── */
+
+  pushScope(initialVars = {}) {
+    this.scopes.push({ ...initialVars });
+  }
+
+  popScope() {
+    if (this.scopes.length > 1) {
+      this.scopes.pop();
+    }
   }
 
   /* ── Init ─────────────────────────────────── */
@@ -17,19 +29,40 @@ export class VariableSystem {
   _initFromData() {
     const defs = Data.variables || {};
     for (const [key, def] of Object.entries(defs)) {
-      this.vars[key] = def.default;
+      this.scopes[0][key] = def.default;
     }
   }
 
   /* ── Read / Write ──────────────────────────── */
 
   get(name) {
-    return this.vars[name];
+    // Search from top to bottom
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      if (name in this.scopes[i]) {
+        return this.scopes[i][name];
+      }
+    }
+    return undefined;
   }
 
   set(name, value) {
-    const old = this.vars[name];
-    this.vars[name] = value;
+    const old = this.get(name);
+    
+    // Find where it's defined and update it there.
+    // If not defined anywhere, set in the local (top) scope.
+    let found = false;
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      if (name in this.scopes[i]) {
+        this.scopes[i][name] = value;
+        found = true;
+        break;
+      }
+    }
+    
+    if (!found) {
+      this.scopes[this.scopes.length - 1][name] = value;
+    }
+
     if (old !== value) {
       this._notify(name, value);
     }
@@ -37,7 +70,7 @@ export class VariableSystem {
 
   /** Apply a delta to a numeric variable */
   add(name, delta) {
-    const cur = this.vars[name];
+    const cur = this.get(name);
     if (typeof cur === 'number') {
       this.set(name, cur + delta);
     }
@@ -45,7 +78,7 @@ export class VariableSystem {
 
   /** Toggle a boolean */
   toggle(name) {
-    this.set(name, !this.vars[name]);
+    this.set(name, !this.get(name));
   }
 
   /* ── Condition Evaluation ──────────────────── */
@@ -97,7 +130,7 @@ export class VariableSystem {
 
     const [_, varName, op, rawVal] = match;
     const val = this._parseValue(rawVal.trim());
-    const current = this.vars[varName];
+    const current = this.get(varName);
 
     switch (op) {
       case '==': case '=': return current == val;
@@ -174,14 +207,14 @@ export class VariableSystem {
 
   /* ── Serialization ─────────────────────────── */
 
-  /** Return plain object for save */
+  /** Return plain object for save (only saves global scope) */
   serialize() {
-    return { ...this.vars };
+    return { ...this.scopes[0] };
   }
 
   /** Restore from save data */
   deserialize(data) {
-    this.vars = { ...data };
+    this.scopes = [{ ...data }];
   }
 
   /* ── Listeners ─────────────────────────────── */

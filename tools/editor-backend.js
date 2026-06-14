@@ -93,6 +93,71 @@ export default function editorBackend(options = {}) {
               if (payload.variables) await fs.writeFile(path.join(dataDir, 'variables.json'), JSON.stringify(payload.variables, null, 2));
               if (payload.theme) await fs.writeFile(path.join(dataDir, 'theme.json'), JSON.stringify(payload.theme, null, 2));
 
+              // Validate the scenes before writing
+              const warnings = [];
+              if (payload.scenes) {
+                const assetCache = new Set();
+                try {
+                  const items = await fs.readdir(path.join(projectRoot, 'public', 'assets'), { recursive: true });
+                  items.forEach(i => assetCache.add(i.replace(/\\\\/g, '/')));
+                } catch (e) {}
+
+                for (const [id, sceneData] of Object.entries(payload.scenes)) {
+                  if (!sceneData.nodes || sceneData.nodes.length === 0) continue;
+                  
+                  // Collect all node IDs
+                  const nodeIds = new Set(sceneData.nodes.map(n => n.id));
+                  
+                  // Check orphaned nodes (BFS from entryNode)
+                  const visited = new Set();
+                  const queue = [sceneData.entryNode];
+                  while (queue.length > 0) {
+                    const currentId = queue.shift();
+                    if (!currentId) continue;
+                    if (visited.has(currentId)) continue;
+                    visited.add(currentId);
+                    
+                    const node = sceneData.nodes.find(n => n.id === currentId);
+                    if (!node) continue;
+                    
+                    if (node.next && !visited.has(node.next)) queue.push(node.next);
+                    if (node.else && !visited.has(node.else)) queue.push(node.else);
+                    if (node.choices) {
+                      for (const c of node.choices) {
+                        if (c.next && !visited.has(c.next)) queue.push(c.next);
+                      }
+                    }
+                  }
+                  
+                  // Find orphaned nodes (optional warning, maybe too noisy for editing)
+                  // but missing references are important:
+                  for (const node of sceneData.nodes) {
+                    if (node.next && !nodeIds.has(node.next)) {
+                      warnings.push(`Scene '${id}': Node '${node.id}' has missing 'next' pointer -> '${node.next}'`);
+                    }
+                    if (node.else && !nodeIds.has(node.else)) {
+                      warnings.push(`Scene '${id}': Node '${node.id}' has missing 'else' pointer -> '${node.else}'`);
+                    }
+                    if (node.choices) {
+                      for (const c of node.choices) {
+                        if (c.next && !nodeIds.has(c.next)) {
+                          warnings.push(`Scene '${id}': Choice in node '${node.id}' has missing 'next' pointer -> '${c.next}'`);
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Check missing assets in layers
+                  if (sceneData.layers) {
+                    for (const layer of sceneData.layers) {
+                      if (layer.asset && !assetCache.has(layer.asset)) {
+                         warnings.push(`Scene '${id}': Layer references missing asset '${layer.asset}'`);
+                      }
+                    }
+                  }
+                }
+              }
+
               // Write scenes
               if (payload.scenes) {
                 // Clear existing scenes first to handle deletions
@@ -125,7 +190,7 @@ export default function editorBackend(options = {}) {
                 }
               }
 
-              res.end(JSON.stringify({ success: true }));
+              res.end(JSON.stringify({ success: true, warnings }));
             } catch (err) {
               console.error('Error saving project:', err);
               res.statusCode = 500;
@@ -193,9 +258,26 @@ export default function editorBackend(options = {}) {
             }
           } else if (req.url === '/api/create-folder') {
             try {
-              const { targetDir } = payload;
-              const dirPath = path.join(projectRoot, 'public', 'assets', targetDir);
+              const { targetPath } = payload; // path relative to project root
+              
+              // Basic security check to prevent escaping project root
+              if (targetPath.includes('..')) throw new Error('Invalid path');
+              
+              const dirPath = path.join(projectRoot, targetPath);
               await fs.mkdir(dirPath, { recursive: true });
+              res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          } else if (req.url === '/api/create-file') {
+            try {
+              const { targetPath, content } = payload;
+              if (targetPath.includes('..')) throw new Error('Invalid path');
+              
+              const filePath = path.join(projectRoot, targetPath);
+              await fs.mkdir(path.dirname(filePath), { recursive: true });
+              await fs.writeFile(filePath, content || '');
               res.end(JSON.stringify({ success: true }));
             } catch (err) {
               res.statusCode = 500;
@@ -204,7 +286,9 @@ export default function editorBackend(options = {}) {
           } else if (req.url === '/api/delete-asset') {
             try {
               const { targetPath } = payload;
-              const fullPath = path.join(projectRoot, 'public', 'assets', targetPath);
+              if (targetPath.includes('..')) throw new Error('Invalid path');
+              
+              const fullPath = path.join(projectRoot, targetPath);
               const stat = await fs.stat(fullPath);
               if (stat.isDirectory()) {
                 await fs.rm(fullPath, { recursive: true, force: true });
