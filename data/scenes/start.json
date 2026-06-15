@@ -11,7 +11,8 @@
       "text": "This is Dave.",
       "x": -920,
       "y": -180,
-      "next": "bgIntro"
+      "next": "bgIntro",
+      "position": ""
     },
     {
       "id": "dialogue_1",

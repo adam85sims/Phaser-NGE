@@ -193,6 +193,7 @@ export async function startServer(port = 0, isDev = false) {
       if (payload.game) await fs.writeFile(path.join(dataDir, 'game.json'), JSON.stringify(payload.game, null, 2));
       if (payload.characters) await fs.writeFile(path.join(dataDir, 'characters.json'), JSON.stringify(payload.characters, null, 2));
       if (payload.variables) await fs.writeFile(path.join(dataDir, 'variables.json'), JSON.stringify(payload.variables, null, 2));
+      if (payload.theme) await fs.writeFile(path.join(dataDir, 'theme.json'), JSON.stringify(payload.theme, null, 2));
 
       res.json({ success: true });
     } catch (err) {
@@ -225,6 +226,21 @@ export async function startServer(port = 0, isDev = false) {
       if (targetPath.includes('..')) throw new Error('Invalid path');
       const dirPath = path.join(currentProjectRoot, targetPath);
       await fs.mkdir(dirPath, { recursive: true });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/move-asset', async (req, res) => {
+    try {
+      if (!currentProjectRoot) throw new Error('No project selected');
+      const { sourcePath, targetPath } = req.body;
+      if (sourcePath.includes('..') || targetPath.includes('..')) throw new Error('Invalid path');
+      const fullSource = path.join(currentProjectRoot, sourcePath);
+      const fullTarget = path.join(currentProjectRoot, targetPath);
+      await fs.mkdir(path.dirname(fullTarget), { recursive: true });
+      await fs.rename(fullSource, fullTarget);
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });

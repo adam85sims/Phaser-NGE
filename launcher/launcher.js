@@ -89,7 +89,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           padding: { x: 30, y: 20 }, transitionDuration: 300
         },
         ui: {
-          menu: { background: "#000", title: { text: projectName, x: 640, y: 360, fontSize: 72 } },
+          menu: { 
+            background: "", 
+            title: { text: projectName, x: 640, y: 220, font: "monospace", size: 56, color: "#ffffff" },
+            subtitle: { text: "— A New Journey —", x: 640, y: 280, font: "monospace", size: 18, color: "#666688" },
+            buttons: [
+              { id: "start", label: "▶ Start Game", x: 640, y: 420, font: "monospace", size: 22, color: "#00ccff", hoverColor: "#ffffff" },
+              { id: "continue", label: "▶ Continue", x: 640, y: 480, font: "monospace", size: 18, color: "#444444", hoverColor: "#88aa88" },
+              { id: "settings", label: "▶ Settings", x: 640, y: 540, font: "monospace", size: 18, color: "#888888", hoverColor: "#ffffff" }
+            ]
+          },
           splash: { enabled: false }
         }
       },

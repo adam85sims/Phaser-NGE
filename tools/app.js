@@ -643,22 +643,45 @@ function renderScenePreview() {
 
   // ── Dialogue overlay for selected node ──
   let dialogueHTML = '';
+  let portraitHTML = '';
   if (editorState.selectedItemType === 'node' && editorState.selectedItemId) {
     const node = sceneData?.nodes?.find(n => n.id === editorState.selectedItemId);
     if (node && node.type === 'dialogue') {
       const charId = node.speaker || '';
       const char = editorState.characters?.[charId];
       const charName = char ? char.name : (charId ? charId : '');
-      const portrait = char && node.expression ? `/assets/portraits/${charId}_${node.expression}.png` : '';
+      
+      const showPortrait = char && !char.invisible;
+      const expressionKey = node.expression || char?.defaultExpression || 'neutral';
+      const portraitAsset = char?.portraits?.[expressionKey] || `characters/${charId}_${expressionKey}`;
+      const portraitUrl = showPortrait ? (portraitAsset.includes('.') ? `/assets/${portraitAsset}` : `/assets/${portraitAsset}.png`) : '';
+
+      if (portraitUrl) {
+        let leftPct = '50%';
+        const pos = node.position || 'center';
+        if (pos === 'left') {
+          leftPct = '20%';
+        } else if (pos === 'center-left') {
+          leftPct = '35%';
+        } else if (pos === 'center' || pos === '') {
+          leftPct = '50%';
+        } else if (pos === 'center-right') {
+          leftPct = '65%';
+        } else if (pos === 'right') {
+          leftPct = '80%';
+        }
+        portraitHTML = `
+          <div style="position:absolute; bottom:120px; left:${leftPct}; transform:translateX(-50%); z-index:45; pointer-events:none;">
+            <img src="${portraitUrl}" onerror="this.style.display='none'" style="height:320px; display:block;" />
+          </div>
+        `;
+      }
 
       dialogueHTML = `
         <div style="position:absolute;bottom:20px;left:20px;right:20px;background:rgba(0,0,0,0.85);border-radius:8px;padding:16px;border:1px solid var(--border);backdrop-filter:blur(4px);z-index:50">
-          <div style="display:flex;align-items:flex-end;gap:12px">
-            ${portrait ? `<img src="${portrait}" style="height:100px;border-radius:4px" />` : ''}
-            <div style="flex:1">
-              ${charName ? `<div style="font-weight:bold;color:${char?.color || 'var(--accent)'};font-size:13px;margin-bottom:4px">${charName}</div>` : ''}
-              <div style="font-size:16px;line-height:1.5;color:var(--text-bright)">${node.text || '...'}</div>
-            </div>
+          <div>
+            ${charName ? `<div style="font-weight:bold;color:${char?.color || 'var(--accent)'};font-size:13px;margin-bottom:4px">${charName}</div>` : ''}
+            <div style="font-size:16px;line-height:1.5;color:var(--text-bright)">${node.text || '...'}</div>
           </div>
         </div>
       `;
@@ -691,6 +714,7 @@ function renderScenePreview() {
 
           ${layerCount === 0 ? '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px;pointer-events:none">🎬 <span style="margin-top:8px">Drop assets here</span></div>' : ''}
 
+          ${portraitHTML}
           ${dialogueHTML}
 
           <!-- Camera border — shows the in-game viewport (800x600) -->

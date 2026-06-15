@@ -234,6 +234,7 @@ export default function editorBackend(options = {}) {
               if (payload.game) await fs.writeFile(path.join(dataDir, 'game.json'), JSON.stringify(payload.game, null, 2));
               if (payload.characters) await fs.writeFile(path.join(dataDir, 'characters.json'), JSON.stringify(payload.characters, null, 2));
               if (payload.variables) await fs.writeFile(path.join(dataDir, 'variables.json'), JSON.stringify(payload.variables, null, 2));
+              if (payload.theme) await fs.writeFile(path.join(dataDir, 'theme.json'), JSON.stringify(payload.theme, null, 2));
 
               res.end(JSON.stringify({ success: true }));
             } catch (err) {
@@ -270,6 +271,23 @@ export default function editorBackend(options = {}) {
               
               const dirPath = path.join(projectRoot, targetPath);
               await fs.mkdir(dirPath, { recursive: true });
+              res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          } else if (req.url === '/api/move-asset') {
+            try {
+              const { sourcePath, targetPath } = payload;
+              if (sourcePath.includes('..') || targetPath.includes('..')) throw new Error('Invalid path');
+              
+              const fullSource = path.join(projectRoot, sourcePath);
+              const fullTarget = path.join(projectRoot, targetPath);
+              
+              // Ensure target directory exists
+              await fs.mkdir(path.dirname(fullTarget), { recursive: true });
+              await fs.rename(fullSource, fullTarget);
+              
               res.end(JSON.stringify({ success: true }));
             } catch (err) {
               res.statusCode = 500;
