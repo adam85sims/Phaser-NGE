@@ -1,4 +1,4 @@
-import { editorState, markDirty } from './state.js';
+import { editorState, markDirty, captureUndoState } from './state.js';
 import { Registry } from '../src/systems/Registry.js';
 
 const NODE_W = 200, NODE_H = 64, PORT_R = 6;
@@ -11,7 +11,8 @@ let graphState = {
   panning: false,
   panStart: { x: 0, y: 0 },
   dragging: null,
-  connectionDraft: null
+  connectionDraft: null,
+  hoveredPort: null
 };
 
 export function mountGraph(container) {
@@ -107,6 +108,7 @@ export function mountGraph(container) {
 /* ── Node CRUD ───────────────────────────── */
 
 export function createNode(type = 'dialogue', wx = null, wy = null) {
+  captureUndoState(); // Capture before creation
   const sceneData = editorState.scenes[editorState.activeSceneId];
   if (!sceneData) return null;
 
@@ -148,6 +150,7 @@ export function createNode(type = 'dialogue', wx = null, wy = null) {
 }
 
 export function deleteNode(nodeId) {
+  captureUndoState(); // Capture before deletion
   const sceneData = editorState.scenes[editorState.activeSceneId];
   if (!sceneData || !sceneData.nodes) return;
 
@@ -286,6 +289,31 @@ function showContextMenu(mx, my) {
   contextMenu = menu;
   document.body.appendChild(menu);
   
+  // Adjust position to keep menu fully visible
+  const menuRect = menu.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  
+  let finalX = mx;
+  let finalY = my;
+  
+  // If menu would overflow right edge, shift left
+  if (menuRect.right > viewportWidth) {
+    finalX = mx - menuRect.width;
+  }
+  
+  // If menu would overflow bottom edge, shift up
+  if (menuRect.bottom > viewportHeight) {
+    finalY = my - menuRect.height;
+  }
+  
+  // Ensure we don't go negative (menu larger than viewport)
+  finalX = Math.max(0, finalX);
+  finalY = Math.max(0, finalY);
+  
+  menu.style.left = finalX + 'px';
+  menu.style.top = finalY + 'px';
+  
   // Focus search
   setTimeout(() => input.focus(), 10);
 }
@@ -386,6 +414,17 @@ function renderCanvas() {
       ctx.strokeStyle = 'rgba(0,204,255,0.4)';
       ctx.lineWidth = 2; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
     }
+    // Highlight drop target input port
+    if (graphState.connectionDraft.dropTarget) {
+      const tn = getNodes().find(x => x.id === graphState.connectionDraft.dropTarget);
+      if (tn) {
+        const tr = getNodeRect(tn);
+        const ts = worldToScreen(tr.x, tr.y);
+        const th = tr.h * graphState.zoom;
+        ctx.beginPath(); ctx.arc(ts.x, ts.y + th / 2, (PORT_R + 4) * graphState.zoom, 0, Math.PI * 2);
+        ctx.strokeStyle = '#00ccff'; ctx.lineWidth = 2; ctx.stroke();
+      }
+    }
   }
 
   const selectedNodeId = editorState.selectedItemType === 'node' ? editorState.selectedItemId : null;
@@ -458,6 +497,7 @@ function renderCanvas() {
     // Output ports
     const oports = getOutputPorts(node, s.x, s.y, sw);
     oports.forEach((p, i) => {
+      const isHovered = graphState.hoveredPort?.nodeId === node.id && graphState.hoveredPort?.portIndex === i;
       ctx.beginPath(); ctx.arc(p.x, p.y, PORT_R * graphState.zoom, 0, Math.PI * 2);
       let pc = 'rgba(255,255,255,0.2)';
       if (p.label === 'TRUE') pc = '#22c55e';
@@ -465,6 +505,11 @@ function renderCanvas() {
       else if (node.type === 'choice' || node.type === 'timed_choice' || node.type === 'random_branch') pc = '#d97706';
       ctx.fillStyle = pc; ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.stroke();
+      // Hover highlight ring
+      if (isHovered) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, (PORT_R + 4) * graphState.zoom, 0, Math.PI * 2);
+        ctx.strokeStyle = '#00ccff'; ctx.lineWidth = 2; ctx.stroke();
+      }
     });
   });
 }
@@ -519,6 +564,7 @@ function onPointerDown(e) {
   const hit = hitTest(mx, my);
 
   if (hit?.type === 'port') {
+    captureUndoState(); // Capture before starting connection drag
     graphState.connectionDraft = { fromId: hit.nodeId, portIndex: hit.portIndex, mx, my };
     return;
   }
@@ -528,6 +574,7 @@ function onPointerDown(e) {
     window.dispatchEvent(new CustomEvent("editor:render"));
     
     const node = getNodes().find(n => n.id === hit.nodeId);
+    captureUndoState(); // Capture before starting node drag
     graphState.dragging = { nodeId: hit.nodeId, startX: mx, startY: my, nodeX: node?.x, nodeY: node?.y };
     return;
   }
@@ -551,7 +598,45 @@ function onPointerMove(e) {
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
-  if (graphState.connectionDraft) { graphState.connectionDraft.mx = mx; graphState.connectionDraft.my = my; return; }
+  // Update cursor and hovered port based on what we're hovering
+  if (!graphState.connectionDraft && !graphState.dragging && !graphState.panning) {
+    const hit = hitTest(mx, my);
+    if (hit?.type === 'port') {
+      canvas.style.cursor = 'crosshair';
+      graphState.hoveredPort = { nodeId: hit.nodeId, portIndex: hit.portIndex };
+    } else if (hit?.type === 'play-btn') {
+      canvas.style.cursor = 'pointer';
+      graphState.hoveredPort = null;
+    } else if (hit?.type === 'node') {
+      canvas.style.cursor = 'grab';
+      graphState.hoveredPort = null;
+    } else {
+      canvas.style.cursor = 'default';
+      graphState.hoveredPort = null;
+    }
+  } else if (graphState.dragging) {
+    canvas.style.cursor = 'grabbing';
+    graphState.hoveredPort = null;
+  } else if (graphState.connectionDraft) {
+    canvas.style.cursor = 'crosshair';
+    graphState.hoveredPort = null;
+  }
+
+  if (graphState.connectionDraft) { graphState.connectionDraft.mx = mx; graphState.connectionDraft.my = my; 
+    // Track nearest valid drop target for visual feedback
+    const dropRadius = Math.max(30, 20 * graphState.zoom);
+    let closest = null, closestDist = Infinity;
+    getNodes().forEach(node => {
+      if (node.id === graphState.connectionDraft.fromId) return;
+      const r = getNodeRect(node);
+      const s = worldToScreen(r.x, r.y);
+      const sh = r.h * graphState.zoom;
+      const d = Math.sqrt((mx - s.x) ** 2 + (my - (s.y + sh / 2)) ** 2);
+      if (d < dropRadius && d < closestDist) { closestDist = d; closest = node.id; }
+    });
+    graphState.connectionDraft.dropTarget = closest;
+    return; 
+  }
   if (graphState.dragging) {
     const d = graphState.dragging;
     const node = getNodes().find(n => n.id === d.nodeId);
@@ -573,6 +658,7 @@ function onPointerUp(e) {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
+    const dropRadius = Math.max(30, 20 * graphState.zoom);
     let closest = null, closestDist = Infinity;
     getNodes().forEach(node => {
       if (node.id === graphState.connectionDraft.fromId) return;
@@ -580,14 +666,17 @@ function onPointerUp(e) {
       const s = worldToScreen(r.x, r.y);
       const sh = r.h * graphState.zoom;
       const d = Math.sqrt((mx - s.x) ** 2 + (my - (s.y + sh / 2)) ** 2);
-      if (d < 30 && d < closestDist) { closestDist = d; closest = node.id; }
+      if (d < dropRadius && d < closestDist) { closestDist = d; closest = node.id; }
     });
     if (closest) {
       const fn = getNodes().find(n => n.id === graphState.connectionDraft.fromId);
       if (fn) {
-        if (fn.type === 'condition' && graphState.connectionDraft.portIndex === 0) fn.next = closest;
-        else if (fn.type === 'condition' && graphState.connectionDraft.portIndex === 1) fn.else = closest;
-        else if (fn.type === 'choice' && fn.choices?.[graphState.connectionDraft.portIndex]) fn.choices[graphState.connectionDraft.portIndex].next = closest;
+        const portIndex = graphState.connectionDraft.portIndex;
+        if (fn.type === 'condition' && portIndex === 0) fn.next = closest;
+        else if (fn.type === 'condition' && portIndex === 1) fn.else = closest;
+        else if ((fn.type === 'choice' || fn.type === 'timed_choice' || fn.type === 'random_branch') && fn.choices?.[portIndex]) {
+          fn.choices[portIndex].next = closest;
+        }
         else fn.next = closest;
         markDirty();
       }
@@ -601,6 +690,25 @@ function onPointerUp(e) {
 }
 
 function hitTest(mx, my) {
+  // Port hit radius scales with zoom, with a generous minimum for usability
+  const portHitRadius = Math.max(12, PORT_R * graphState.zoom) + 4;
+  
+  // First pass: check output ports (they extend beyond node bounds, so check independently)
+  for (let i = getNodes().length - 1; i >= 0; i--) {
+    const node = getNodes()[i];
+    const r = getNodeRect(node);
+    const s = worldToScreen(r.x, r.y);
+    const sw = r.w * graphState.zoom;
+    const oports = getOutputPorts(node, s.x, s.y, sw);
+    for (let p = 0; p < oports.length; p++) {
+      const dx = mx - oports[p].x, dy = my - oports[p].y;
+      if (dx * dx + dy * dy < portHitRadius * portHitRadius) {
+        return { type: 'port', nodeId: node.id, portIndex: p };
+      }
+    }
+  }
+  
+  // Second pass: check node bodies and play buttons
   for (let i = getNodes().length - 1; i >= 0; i--) {
     const node = getNodes()[i];
     const r = getNodeRect(node);
@@ -608,12 +716,6 @@ function hitTest(mx, my) {
     const sw = r.w * graphState.zoom;
     const sh = r.h * graphState.zoom;
     if (mx >= s.x && mx <= s.x + sw && my >= s.y && my <= s.y + sh) {
-      const oports = getOutputPorts(node, s.x, s.y, sw);
-      for (let p = 0; p < oports.length; p++) {
-        const dx = mx - oports[p].x, dy = my - oports[p].y;
-        if (dx * dx + dy * dy < 100) return { type: 'port', nodeId: node.id, portIndex: p };
-      }
-      
       // Play btn hit box
       const playBtnX = s.x + sw - 20 * graphState.zoom - (node.comment ? 20 * graphState.zoom : 0);
       const playBtnY = s.y + 22 * graphState.zoom;

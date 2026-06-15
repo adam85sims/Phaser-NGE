@@ -105,7 +105,9 @@ input, select { font-family: inherit; font-size: inherit; }
   padding: 0 12px;
   flex-shrink: 0;
 }
-.topbar-left, .topbar-right { display: flex; align-items: center; gap: 8px; }
+.topbar-left, .topbar-right, .topbar-center { display: flex; align-items: center; gap: 8px; }
+.topbar-center { flex: 1; justify-content: center; }
+.topbar-center .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .brand {
   font-weight: 600;
   color: var(--text-bright);
@@ -1064,3 +1066,75 @@ body[data-dirty="true"] #inspector {
   background: rgba(91, 158, 255, 0.05);
   border-color: var(--accent);
 }
+
+/* ══════════════════════════════════════════
+   MODALS
+   ══════════════════════════════════════════ */
+.editor-modal {
+  margin: auto;
+  padding: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  width: 480px;
+  max-width: 90vw;
+}
+
+.editor-modal::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.editor-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+}
+
+.editor-modal .modal-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.editor-modal .modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.editor-modal .setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-modal .setting-group label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.editor-modal .setting-group input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.editor-modal .modal-footer {
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  border-radius: 0 0 8px 8px;
+}
+

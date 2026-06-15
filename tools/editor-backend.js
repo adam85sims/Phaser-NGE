@@ -19,6 +19,11 @@ export default function editorBackend(options = {}) {
             try {
               const baseDir = path.join(projectRoot, 'public', 'assets');
               
+              await fs.mkdir(path.join(baseDir, 'backgrounds'), { recursive: true });
+              await fs.mkdir(path.join(baseDir, 'characters'), { recursive: true });
+              await fs.mkdir(path.join(baseDir, 'audio/bgm'), { recursive: true });
+              await fs.mkdir(path.join(baseDir, 'audio/sfx'), { recursive: true });
+              
               async function scanDirRecursive(dirPath) {
                 let results = [];
                 try {

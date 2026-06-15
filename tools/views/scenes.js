@@ -126,8 +126,8 @@ function _actionButtons(id) {
 
 /* ─── ACTIONS ──────────────────────────────────── */
 
-window.__sceneAdd = () => {
-  const id = prompt('New scene ID:', 'scene_' + Date.now());
+window.__sceneAdd = async () => {
+  const id = await window.promptAsync('New scene ID:', 'scene_' + Date.now());
   if (!id) return;
   if ((_app.data.game?.scenes || []).includes(id)) return alert('Scene already exists');
 

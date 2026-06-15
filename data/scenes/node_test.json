@@ -1,0 +1,426 @@
+{
+  "id": "node_test",
+  "entryNode": "intro",
+  "background": null,
+  "music": null,
+  "layers": [
+    {
+      "id": "test_layer_bg",
+      "type": "background",
+      "asset": "backgrounds/BG_forest_00001_.png",
+      "x": 640,
+      "y": 360,
+      "scale": 0.6,
+      "zIndex": 1,
+      "opacity": 1,
+      "hidden": true
+    }
+  ],
+  "nodes": [
+    {
+      "id": "intro",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "NODE TEST SCENE — Press F4 to reach this. Walk through each section. Each labelled node corresponds to a test case in docs/qa-node-system.md. Click/press Space to advance.",
+      "next": "section_dialogue_basic"
+    },
+    {
+      "id": "section_dialogue_basic",
+      "type": "dialogue",
+      "speaker": "Dave",
+      "expression": "neutral",
+      "position": "center",
+      "zIndex": 1,
+      "text": "[SECTION 1] Dialogue basics — speaker nameplate 'Dave' should appear, placeholder portrait shown.",
+      "next": "section_dialogue_inline_tags"
+    },
+    {
+      "id": "section_dialogue_inline_tags",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 2] Inline tag test — watch the hidden background fade in. [show:backgrounds/BG_forest_00001_.png] Now visible. [hide:backgrounds/BG_forest_00001_.png] Now hidden again.",
+      "next": "section_dialogue_autoadvance"
+    },
+    {
+      "id": "section_dialogue_autoadvance",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 3] autoAdvance — this line should disappear in ~2s without clicking.",
+      "autoAdvance": true,
+      "waitTime": 2000,
+      "next": "section_set_variable"
+    },
+    {
+      "id": "section_set_variable",
+      "type": "set_variable",
+      "variable": "test_score",
+      "value": 10,
+      "operation": "set",
+      "next": "section_set_variable_add"
+    },
+    {
+      "id": "section_set_variable_add",
+      "type": "set_variable",
+      "variable": "test_score",
+      "value": 5,
+      "operation": "add",
+      "next": "section_set_variable_toggle"
+    },
+    {
+      "id": "section_set_variable_toggle",
+      "type": "set_variable",
+      "variable": "test_flag_bool",
+      "value": true,
+      "operation": "toggle",
+      "next": "section_condition_true"
+    },
+    {
+      "id": "section_condition_true",
+      "type": "condition",
+      "condition": "test_score >= 15",
+      "next": "section_condition_true_pass",
+      "else": "section_condition_true_fail"
+    },
+    {
+      "id": "section_condition_true_pass",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 4 — PASS] test_score == 15 (10 set, 5 added). test_flag_bool toggled to true.",
+      "next": "section_condition_compound"
+    },
+    {
+      "id": "section_condition_true_fail",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 4 — FAIL] test_score did not reach 15. Variable math is broken.",
+      "next": "section_condition_compound"
+    },
+    {
+      "id": "section_condition_compound",
+      "type": "condition",
+      "condition": "(test_score >= 10 AND test_flag_bool == true) OR chaos_points >= 1000",
+      "next": "section_condition_compound_pass",
+      "else": "section_condition_compound_fail"
+    },
+    {
+      "id": "section_condition_compound_pass",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 5 — PASS] Compound (AND/OR/parens) evaluated TRUE. Expected: left side true (15 >= 10 AND flag == true).",
+      "next": "section_choice"
+    },
+    {
+      "id": "section_condition_compound_fail",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 5 — FAIL] Compound evaluated FALSE.",
+      "next": "section_choice"
+    },
+    {
+      "id": "section_choice",
+      "type": "choice",
+      "prompt": "[SECTION 6] Choice — 3 options. Path C requires test_score >= 100, so it should be HIDDEN (current score = 15).",
+      "choices": [
+        {
+          "text": "Path A (always available)",
+          "next": "section_choice_a"
+        },
+        {
+          "text": "Path B (requires test_flag_bool == true)",
+          "condition": "test_flag_bool == true",
+          "next": "section_choice_b"
+        },
+        {
+          "text": "Path C (requires test_score >= 100 — should be HIDDEN)",
+          "condition": "test_score >= 100",
+          "next": "section_choice_c"
+        }
+      ],
+      "next": "section_choice_fallback"
+    },
+    {
+      "id": "section_choice_a",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "Path A selected.",
+      "next": "section_timed_choice"
+    },
+    {
+      "id": "section_choice_b",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "Path B selected (conditional filter passed).",
+      "next": "section_timed_choice"
+    },
+    {
+      "id": "section_choice_c",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "Path C selected — this should be unreachable from this scene (test_score is 15).",
+      "next": "section_timed_choice"
+    },
+    {
+      "id": "section_choice_fallback",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 6 — PASS] No valid choices → fell through to `next`.",
+      "next": "section_timed_choice"
+    },
+    {
+      "id": "section_timed_choice",
+      "type": "timed_choice",
+      "duration": 3000,
+      "default_next": "section_timed_choice_default",
+      "prompt": "[SECTION 7] Timed choice — 3 seconds. Click 'Quick' OR wait for the timer.",
+      "choices": [
+        {
+          "text": "Quick (click me)",
+          "next": "section_timed_choice_click"
+        }
+      ],
+      "next": "section_timed_choice_default"
+    },
+    {
+      "id": "section_timed_choice_click",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 7 — PASS] You clicked before the 3s timer.",
+      "next": "section_random_branch"
+    },
+    {
+      "id": "section_timed_choice_default",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 7 — INFO] Timer expired, default_next was used.",
+      "next": "section_random_branch"
+    },
+    {
+      "id": "section_random_branch",
+      "type": "random_branch",
+      "choices": [
+        {
+          "weight": 1,
+          "next": "section_random_a"
+        },
+        {
+          "weight": 3,
+          "next": "section_random_b"
+        }
+      ],
+      "next": "section_random_default"
+    },
+    {
+      "id": "section_random_a",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 8] Random branch A (weight 1, ~25%). Re-run the scene to see the other branch.",
+      "next": "section_event_bgm"
+    },
+    {
+      "id": "section_random_b",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 8] Random branch B (weight 3, ~75%). Re-run the scene to see the other branch.",
+      "next": "section_event_bgm"
+    },
+    {
+      "id": "section_random_default",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 8 — INFO] random_branch fell through (empty choices).",
+      "next": "section_event_bgm"
+    },
+    {
+      "id": "section_event_bgm",
+      "type": "event",
+      "eventType": "bgm",
+      "eventValue": "audio/bgm/bgm_imacomposernow",
+      "next": "section_event_sfx"
+    },
+    {
+      "id": "section_event_sfx",
+      "type": "event",
+      "eventType": "sfx",
+      "eventValue": "click",
+      "eventVolume": 0.5,
+      "next": "section_event_bg_change"
+    },
+    {
+      "id": "section_event_bg_change",
+      "type": "event",
+      "eventType": "bg_change",
+      "eventValue": "backgrounds/BG_village_00001_.png",
+      "next": "section_event_camera_shake"
+    },
+    {
+      "id": "section_event_camera_shake",
+      "type": "event",
+      "eventType": "camera_shake",
+      "eventValue": "500,0.01",
+      "next": "section_event_camera_flash"
+    },
+    {
+      "id": "section_event_camera_flash",
+      "type": "event",
+      "eventType": "camera_flash",
+      "eventValue": "255,255,255",
+      "next": "section_event_play_animation"
+    },
+    {
+      "id": "section_event_play_animation",
+      "type": "event",
+      "eventType": "play_animation",
+      "eventTarget": "test_layer_bg",
+      "eventValue": "test_anim",
+      "next": "section_event_bgm_stop"
+    },
+    {
+      "id": "section_event_bgm_stop",
+      "type": "event",
+      "eventType": "bgm_stop",
+      "next": "section_wait"
+    },
+    {
+      "id": "section_wait",
+      "type": "wait",
+      "duration": 2000,
+      "next": "section_animate"
+    },
+    {
+      "id": "section_animate",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 10] animate — next node tweens the test layer X position to 200 over 1.5s.",
+      "next": "section_animate_tween"
+    },
+    {
+      "id": "section_animate_tween",
+      "type": "animate",
+      "target": "test_layer_bg",
+      "property": "x",
+      "value": 200,
+      "duration": 1500,
+      "easing": "Linear",
+      "wait": true,
+      "next": "section_show_object"
+    },
+    {
+      "id": "section_show_object",
+      "type": "show_object",
+      "target": "test_layer_bg",
+      "duration": 500,
+      "wait": true,
+      "next": "section_hide_object"
+    },
+    {
+      "id": "section_hide_object",
+      "type": "hide_object",
+      "target": "test_layer_bg",
+      "duration": 500,
+      "wait": true,
+      "next": "section_camera_node_shake"
+    },
+    {
+      "id": "section_camera_node_shake",
+      "type": "camera",
+      "action": "shake",
+      "value": "0.015",
+      "duration": 800,
+      "wait": true,
+      "next": "section_camera_node_zoom"
+    },
+    {
+      "id": "section_camera_node_zoom",
+      "type": "camera",
+      "action": "zoom",
+      "value": "1.2",
+      "duration": 800,
+      "wait": true,
+      "next": "section_camera_node_pan"
+    },
+    {
+      "id": "section_camera_node_pan",
+      "type": "camera",
+      "action": "pan",
+      "value": "200,200",
+      "duration": 800,
+      "wait": true,
+      "next": "section_camera_node_flash"
+    },
+    {
+      "id": "section_camera_node_flash",
+      "type": "camera",
+      "action": "flash",
+      "duration": 500,
+      "wait": true,
+      "next": "section_call_scene"
+    },
+    {
+      "id": "section_call_scene",
+      "type": "call_scene",
+      "sceneId": "node_test_sub",
+      "next": "section_call_scene_returned"
+    },
+    {
+      "id": "section_call_scene_returned",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 13 — PASS] Returned from call_scene (sub-scene end popped the call stack).",
+      "next": "section_macro"
+    },
+    {
+      "id": "section_macro",
+      "type": "macro",
+      "sceneId": "node_test_sub",
+      "args": {
+        "greeting": "Hello from macro!",
+        "count": 42
+      },
+      "next": "section_macro_returned"
+    },
+    {
+      "id": "section_macro_returned",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 14 — INFO] Returned from macro. The sub-scene tests the args — check its dialogue for PASS/FAIL.",
+      "next": "section_set_flag_inline"
+    },
+    {
+      "id": "section_set_flag_inline",
+      "type": "set_variable",
+      "variable": "test_score",
+      "value": 50,
+      "operation": "set",
+      "setFlag": "test_log",
+      "setValue": "reached_set_flag_section",
+      "next": "section_set_flag_check"
+    },
+    {
+      "id": "section_set_flag_check",
+      "type": "condition",
+      "condition": "test_log == \"reached_set_flag_section\"",
+      "next": "section_set_flag_pass",
+      "else": "section_set_flag_fail"
+    },
+    {
+      "id": "section_set_flag_pass",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 15 — PASS] Inline setFlag/setValue on a node applied before the next node processed.",
+      "next": "section_end_with_next_scene"
+    },
+    {
+      "id": "section_set_flag_fail",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SECTION 15 — FAIL] Inline setFlag/setValue was not applied.",
+      "next": "section_end_with_next_scene"
+    },
+    {
+      "id": "section_end_with_next_scene",
+      "type": "end",
+      "text": "[SECTION 16] end with nextScene — should re-trigger this same scene after 2.5s.",
+      "nextScene": "node_test"
+    }
+  ]
+}

@@ -20,16 +20,17 @@
       "y": -60,
       "speaker": "narrator",
       "text": "Dave is about to have a very very bad day. [show:dave_fullbody_00001_]",
-      "next": ""
+      "next": "timed_choice_1"
     },
     {
       "id": "show_object_1",
       "type": "show_object",
-      "x": -700,
+      "x": -720,
       "y": -60,
-      "target": "Elena_neutral_00001_",
+      "target": "characters/Elena_neutral_00001_.png",
       "next": "dialogue_1",
-      "wait": "on"
+      "wait": "on",
+      "duration": 2
     },
     {
       "id": "bgIntro",
@@ -43,10 +44,27 @@
     {
       "id": "wait_1",
       "type": "wait",
-      "x": -460,
+      "x": -440,
       "y": -180,
       "duration": 10000,
       "next": "show_object_1"
+    },
+    {
+      "id": "timed_choice_1",
+      "type": "timed_choice",
+      "x": -140,
+      "y": -160,
+      "duration": 5000,
+      "default_next": "",
+      "prompt": "Click this.",
+      "choices": [
+        {
+          "text": "This?",
+          "condition": "",
+          "next": ""
+        }
+      ],
+      "next": ""
     }
   ],
   "layers": [

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Phaser NGE - Launcher</title>
+  <style>
+    body {
+      background-color: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 0.5rem;
+      background: -webkit-linear-gradient(45deg, #58a6ff, #8a2be2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p {
+      color: #8b949e;
+      margin-bottom: 2rem;
+    }
+    .btn {
+      background-color: #238636;
+      color: #ffffff;
+      border: 1px solid rgba(240, 246, 252, 0.1);
+      padding: 12px 24px;
+      font-size: 1.2rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn:hover {
+      background-color: #2ea043;
+    }
+    .actions {
+      display: flex;
+      gap: 1rem;
+    }
+    .current-project {
+      margin-top: 2rem;
+      font-family: monospace;
+      padding: 10px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      display: none;
+    }
+    
+    /* Modal Styles */
+    dialog {
+      background-color: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 30px;
+      width: 400px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+    }
+    dialog h2 {
+      margin-top: 0;
+      font-size: 1.5rem;
+      font-weight: 500;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .input-group label {
+      font-size: 0.9rem;
+      color: #8b949e;
+    }
+    .input-group input {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 1.1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-group input:focus {
+      border-color: #58a6ff;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .btn-secondary {
+      background-color: transparent;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn-secondary:hover {
+      background-color: #21262d;
+    }
+  </style>
+</head>
+<body>
+  <h1>Phaser NGE</h1>
+  <p>Narrative Game Engine Editor</p>
+  
+  <div class="actions">
+    <button id="btn-open" class="btn">Open Project Folder</button>
+    <button id="btn-new" class="btn" style="background-color: #1f6feb;">Create New Project</button>
+  </div>
+  
+  <div id="current-project" class="current-project"></div>
+
+  <dialog id="new-project-modal">
+    <h2>Name your Project</h2>
+    <div class="input-group">
+      <label for="project-name">Project Name</label>
+      <input type="text" id="project-name" placeholder="My Awesome Game" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="modal-actions">
+      <button id="btn-cancel" class="btn-secondary">Cancel</button>
+      <button id="btn-confirm" class="btn" style="background-color: #1f6feb; font-size: 1rem;">Create Project</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="/launcher/launcher.js"></script>
+</body>
+</html>

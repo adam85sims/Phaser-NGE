@@ -1,0 +1,43 @@
+{
+  "duration": 1500,
+  "loop": 0,
+  "tracks": {
+    "alpha": [
+      {
+        "time": 0,
+        "value": 1,
+        "ease": "Linear"
+      },
+      {
+        "time": 750,
+        "value": 0.3,
+        "ease": "Linear"
+      },
+      {
+        "time": 1500,
+        "value": 1,
+        "ease": "Linear"
+      }
+    ],
+    "scaleX": [
+      {
+        "time": 0,
+        "value": 1
+      },
+      {
+        "time": 1500,
+        "value": 1.2
+      }
+    ],
+    "scaleY": [
+      {
+        "time": 0,
+        "value": 1
+      },
+      {
+        "time": 1500,
+        "value": 1.2
+      }
+    ]
+  }
+}

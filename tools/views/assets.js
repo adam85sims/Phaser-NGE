@@ -65,7 +65,7 @@ export function render(container, app) {
   });
 
   container.querySelector('#btn-new-folder')?.addEventListener('click', async () => {
-    const name = prompt('New folder name:');
+    const name = await window.promptAsync('New folder name:');
     if (name) {
       const targetDir = _state.currentFolder ? `${_state.currentFolder}/${name}` : name;
       try {

@@ -482,7 +482,7 @@ function _bindEvents() {
   
   // Buttons
   document.getElementById('btn-create-folder')?.addEventListener('click', async () => {
-    const folderName = prompt('New folder name:');
+    const folderName = await window.promptAsync('New folder name:');
     if (!folderName) return;
     const targetPath = `${_state.selectedFolder}/${folderName}`;
     try {
@@ -501,7 +501,7 @@ function _bindEvents() {
   });
 
   document.getElementById('btn-create-file')?.addEventListener('click', async () => {
-    const fileName = prompt('New file name (e.g. script.js):');
+    const fileName = await window.promptAsync('New file name (e.g. script.js):');
     if (!fileName) return;
     const targetPath = `${_state.selectedFolder}/${fileName}`;
     try {
@@ -684,7 +684,7 @@ function _hideContextMenu() {
   _state.contextMenuPath = null;
 }
 
-function _handleContextMenuAction(action) {
+async function _handleContextMenuAction(action) {
   if (!_state.contextMenuPath) return;
   
   switch (action) {
@@ -710,7 +710,7 @@ function _handleContextMenuAction(action) {
       }
       break;
     case 'create-folder': {
-      const folderName = prompt('New folder name:');
+      const folderName = await window.promptAsync('New folder name:');
       if (!folderName) break;
       const targetPath = `${_state.contextMenuPath.replace(/\\.[^/.]+$/, '')}/${folderName}`;
       fetch('/api/create-folder', {
@@ -726,7 +726,7 @@ function _handleContextMenuAction(action) {
       break;
     }
     case 'create-file': {
-      const fileName = prompt('New file name (e.g. script.js):');
+      const fileName = await window.promptAsync('New file name (e.g. script.js):');
       if (!fileName) break;
       const targetPath = `${_state.contextMenuPath.replace(/\\.[^/.]+$/, '')}/${fileName}`;
       fetch('/api/create-file', {

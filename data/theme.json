@@ -27,9 +27,9 @@
     "toastFontSize": 24,
     "toastBackgroundColor": "#00000088",
     "menu": {
-      "background": "http://localhost:3000/assets/backgrounds/BG_forest_00001_.png",
+      "background": "http://localhost:3000/assets/backgrounds/BG_throne_00001_.png",
       "title": {
-        "text": "Dave is Drowning",
+        "text": "Welcome to NGE",
         "x": 640,
         "y": 220,
         "font": "monospace",

@@ -1,9 +1,12 @@
-import { editorState, loadProjectData, markDirty, forceSave } from './state.js';
+import { editorState, loadProjectData, markDirty, forceSave, undo, redo, canUndo, canRedo, captureUndoState } from './state.js';
 import '../src/nodes/CoreNodes.js';
 
 // ── Boot ───────────────────────────────────────────────
 async function boot() {
   await loadProjectData();
+  
+  // Capture initial state for undo baseline
+  captureUndoState(true);
   
   if (editorState.activeSceneId) {
     const mod = await import('./views/scene-composer.js');
@@ -53,6 +56,103 @@ async function boot() {
 
   document.getElementById('btn-save')?.addEventListener('click', () => {
     forceSave();
+  });
+
+  // Undo/Redo buttons
+  const btnUndo = document.getElementById('btn-undo');
+  const btnRedo = document.getElementById('btn-redo');
+  const btnSettings = document.getElementById('btn-settings');
+  const btnExport = document.getElementById('btn-export');
+  const settingsModal = document.getElementById('settings-modal');
+
+  btnExport?.addEventListener('click', async () => {
+    try {
+      await forceSave();
+      const result = await window.electron.exportWebBuild();
+      if (result && result.success) {
+        alert('Web build exported successfully to:\n' + result.path);
+      } else if (result && result.error) {
+        alert('Export failed:\n' + result.error);
+      }
+    } catch (err) {
+      alert('Error during export:\n' + err.message);
+    }
+  });
+
+  btnSettings?.addEventListener('click', () => {
+    if (settingsModal) {
+      // Populate fields
+      document.getElementById('setting-project-name').value = editorState.gameConfig?.title || '';
+      document.getElementById('setting-viewport-w').value = editorState.gameConfig?.width || 1280;
+      document.getElementById('setting-viewport-h').value = editorState.gameConfig?.height || 720;
+      document.getElementById('setting-text-speed').value = editorState.gameConfig?.defaults?.textSpeed || 40;
+      document.getElementById('setting-volume-bgm').value = editorState.gameConfig?.defaults?.bgmVolume || 0.7;
+      document.getElementById('setting-volume-sfx').value = editorState.gameConfig?.defaults?.sfxVolume || 1;
+      settingsModal.showModal();
+    }
+  });
+
+  const btnSettingsClose = document.getElementById('btn-settings-close');
+  const btnSettingsSave = document.getElementById('btn-settings-save');
+
+  btnSettingsClose?.addEventListener('click', () => {
+    settingsModal?.close();
+  });
+
+  btnSettingsSave?.addEventListener('click', () => {
+    if (!editorState.gameConfig) editorState.gameConfig = {};
+    if (!editorState.gameConfig.defaults) editorState.gameConfig.defaults = {};
+
+    editorState.gameConfig.title = document.getElementById('setting-project-name').value;
+    editorState.gameConfig.width = parseInt(document.getElementById('setting-viewport-w').value) || 1280;
+    editorState.gameConfig.height = parseInt(document.getElementById('setting-viewport-h').value) || 720;
+    editorState.gameConfig.defaults.textSpeed = parseInt(document.getElementById('setting-text-speed').value) || 40;
+    editorState.gameConfig.defaults.bgmVolume = parseFloat(document.getElementById('setting-volume-bgm').value) || 0.7;
+    editorState.gameConfig.defaults.sfxVolume = parseFloat(document.getElementById('setting-volume-sfx').value) || 1;
+
+    editorState.viewportWidth = editorState.gameConfig.width;
+    editorState.viewportHeight = editorState.gameConfig.height;
+
+    settingsModal?.close();
+    markDirty();
+    renderScenePreview();
+  });
+  btnUndo?.addEventListener('click', () => {
+    undo();
+  });
+  
+  btnRedo?.addEventListener('click', () => {
+    redo();
+  });
+  
+  // Update undo/redo button states
+  const updateUndoRedoButtons = () => {
+    if (btnUndo) btnUndo.disabled = !canUndo();
+    if (btnRedo) btnRedo.disabled = !canRedo();
+  };
+  
+  window.addEventListener('editor:undoStateChanged', updateUndoRedoButtons);
+  
+  // Keyboard shortcuts for undo/redo
+  document.addEventListener('keydown', (e) => {
+    // Ignore if typing in an input
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+    }
+    
+    // Ctrl+Y as alternative redo
+    if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+      e.preventDefault();
+      redo();
+    }
   });
 
   // Listen for background changes from asset apply
@@ -411,9 +511,9 @@ function renderScenePreview() {
   const VH = editorState.viewportHeight || 720;
   const RULER_SIZE = 24;
 
-  // Game camera frame (1280x720 inside viewport)
-  const GA = 1280;  // game area width
-  const GB = 720;  // game area height
+  // Game camera frame matches viewport
+  const GA = VW;
+  const GB = VH;
   const camLeft = Math.round((VW - GA) / 2);
   const camTop = Math.round((VH - GB) / 2);
 
@@ -1248,3 +1348,43 @@ function initResizers() {
 }
 
 boot();
+
+window.promptAsync = (message, defaultText = '') => {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;padding:20px;width:400px;max-width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.5);';
+    
+    modal.innerHTML = `
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-bright)">${message.replace(/</g, '&lt;')}</div>
+      <input type="text" id="prompt-input" style="width:100%;background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;margin-bottom:16px;font-size:13px;" value="${defaultText.replace(/"/g, '&quot;')}" />
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button id="prompt-cancel" class="btn">Cancel</button>
+        <button id="prompt-ok" class="btn btn-primary">OK</button>
+      </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    const input = modal.querySelector('#prompt-input');
+    const btnOk = modal.querySelector('#prompt-ok');
+    const btnCancel = modal.querySelector('#prompt-cancel');
+    
+    input.focus();
+    input.select();
+    
+    const cleanup = () => {
+      if (overlay.parentNode) document.body.removeChild(overlay);
+    };
+    
+    btnOk.onclick = () => { cleanup(); resolve(input.value); };
+    btnCancel.onclick = () => { cleanup(); resolve(null); };
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') { cleanup(); resolve(input.value); }
+      if (e.key === 'Escape') { cleanup(); resolve(null); }
+    };
+  });
+};

@@ -7,5 +7,27 @@
     "name": "Narrator",
     "color": "#00ccff",
     "invisible": true
+  },
+  "Elena": {
+    "name": "Elena",
+    "color": "#ff6b9d",
+    "portraits": {
+      "neutral": "characters/Elena_neutral_00001_",
+      "smile": "characters/Elena_smile_00001_"
+    }
+  },
+  "Lyra": {
+    "name": "Lyra",
+    "color": "#a78bfa",
+    "portraits": {
+      "elf": "characters/Lyra_elf_00001_"
+    }
+  },
+  "Marcus": {
+    "name": "Marcus",
+    "color": "#fbbf24",
+    "portraits": {
+      "stern": "characters/Marcus_stern_00001_"
+    }
   }
 }

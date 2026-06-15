@@ -1,0 +1,62 @@
+{
+  "id": "node_test_sub",
+  "entryNode": "sub_intro",
+  "background": null,
+  "music": null,
+  "nodes": [
+    {
+      "id": "sub_intro",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SUB-SCENE] Entered via call_scene/macro. Will check if args were passed (only macro passes args).",
+      "next": "sub_greeting_check"
+    },
+    {
+      "id": "sub_greeting_check",
+      "type": "condition",
+      "condition": "greeting == \"Hello from macro!\"",
+      "next": "sub_greeting_pass",
+      "else": "sub_greeting_fail"
+    },
+    {
+      "id": "sub_greeting_pass",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SUB — PASS] `greeting` arg was pushed into the variable scope by macro. This message only appears if a macro called us.",
+      "next": "sub_count_check"
+    },
+    {
+      "id": "sub_greeting_fail",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SUB — INFO] No `greeting` arg. This is expected if a call_scene (not macro) reached us — call_scene does not push args.",
+      "next": "sub_end"
+    },
+    {
+      "id": "sub_count_check",
+      "type": "condition",
+      "condition": "count == 42",
+      "next": "sub_count_pass",
+      "else": "sub_count_fail"
+    },
+    {
+      "id": "sub_count_pass",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SUB — PASS] `count` arg == 42.",
+      "next": "sub_end"
+    },
+    {
+      "id": "sub_count_fail",
+      "type": "dialogue",
+      "speaker": "narrator",
+      "text": "[SUB — FAIL] `count` arg missing or wrong.",
+      "next": "sub_end"
+    },
+    {
+      "id": "sub_end",
+      "type": "end",
+      "text": "[SUB — INFO] Sub-scene ending. With no `nextScene` set, this should pop the call stack and return to the caller."
+    }
+  ]
+}

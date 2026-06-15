@@ -109,8 +109,8 @@ function _syncToApp() {
   window.__markProjectDirty?.();
 }
 
-window.__setAddScene = () => {
-  const name = prompt('New scene ID:');
+window.__setAddScene = async () => {
+  const name = await window.promptAsync('New scene ID:');
   if (!name) return;
   if (!_state.config.scenes) _state.config.scenes = [];
   if (_state.config.scenes.includes(name)) return alert('Scene already registered');
