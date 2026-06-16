@@ -11,6 +11,26 @@ const isDev = process.env.VITE_ELECTRON === 'true';
 let mainWindow;
 let serverPort;
 
+const recentProjectsPath = path.join(app.getPath('userData'), 'recent-projects.json');
+
+async function getRecentProjects() {
+  try {
+    const data = await fs.readFile(recentProjectsPath, 'utf-8');
+    return JSON.parse(data);
+  } catch (err) {
+    return [];
+  }
+}
+
+async function saveRecentProjects(projects) {
+  try {
+    await fs.mkdir(path.dirname(recentProjectsPath), { recursive: true });
+    await fs.writeFile(recentProjectsPath, JSON.stringify(projects, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save recent projects:', err);
+  }
+}
+
 async function createWindow() {
   // In dev, use port 3001 for embedded server. In prod, use random port.
   serverPort = await startServer(isDev ? 3001 : 0, isDev);
@@ -41,6 +61,45 @@ async function createWindow() {
       setProjectRoot(selectedPath);
       return selectedPath;
     }
+  });
+
+  ipcMain.handle('projects:getRecent', async () => {
+    return await getRecentProjects();
+  });
+
+  ipcMain.handle('projects:addRecent', async (event, { path: projectPath, name }) => {
+    let projects = await getRecentProjects();
+    projects = projects.filter(p => p.path !== projectPath);
+    projects.unshift({
+      path: projectPath,
+      name,
+      lastOpened: new Date().toISOString()
+    });
+    if (projects.length > 10) {
+      projects = projects.slice(0, 10);
+    }
+    await saveRecentProjects(projects);
+    return projects;
+  });
+
+  ipcMain.handle('projects:removeRecent', async (event, projectPath) => {
+    let projects = await getRecentProjects();
+    projects = projects.filter(p => p.path !== projectPath);
+    await saveRecentProjects(projects);
+    return projects;
+  });
+
+  ipcMain.handle('projects:setRoot', async (event, projectPath) => {
+    try {
+      const stat = await fs.stat(projectPath);
+      if (!stat.isDirectory()) {
+        return { success: false, error: 'not_directory' };
+      }
+    } catch (err) {
+      return { success: false, error: 'not_found' };
+    }
+    setProjectRoot(projectPath);
+    return { success: true };
   });
 
   ipcMain.handle('project:exportWeb', async () => {

@@ -15,43 +15,223 @@
       height: 100vh;
       margin: 0;
     }
+    
+    .launcher-card {
+      background-color: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 40px;
+      width: 850px;
+      max-width: 90%;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      box-sizing: border-box;
+    }
+
+    .launcher-header {
+      text-align: center;
+    }
+
     h1 {
-      font-size: 3rem;
-      margin-bottom: 0.5rem;
+      font-size: 2.8rem;
+      margin: 0 0 0.5rem 0;
       background: -webkit-linear-gradient(45deg, #58a6ff, #8a2be2);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      font-weight: 800;
+      letter-spacing: -0.5px;
     }
-    p {
+
+    .launcher-header p {
       color: #8b949e;
-      margin-bottom: 2rem;
+      margin: 0;
+      font-size: 1.1rem;
     }
-    .btn {
-      background-color: #238636;
-      color: #ffffff;
-      border: 1px solid rgba(240, 246, 252, 0.1);
-      padding: 12px 24px;
-      font-size: 1.2rem;
+
+    .launcher-content {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 40px;
+      min-height: 280px;
+    }
+
+    /* When there are no recent projects, change template columns to center action */
+    .launcher-content.no-recent {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      min-height: auto;
+    }
+
+    .launcher-content.no-recent .recent-projects-section {
+      display: none;
+    }
+
+    .launcher-content.no-recent .actions-section {
+      text-align: center;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .recent-projects-section, .actions-section {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .recent-projects-section h2, .actions-section h2 {
+      font-size: 1.1rem;
       font-weight: 600;
-      border-radius: 6px;
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: #f0f6fc;
+      border-bottom: 1px solid #21262d;
+      padding-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .recent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+
+    /* Scrollbar styling for recent list */
+    .recent-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .recent-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .recent-list::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 3px;
+    }
+    .recent-list::-webkit-scrollbar-thumb:hover {
+      background: #8b949e;
+    }
+    
+    .recent-item {
+      background-color: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: all 0.2s ease;
+      position: relative;
     }
-    .btn:hover {
-      background-color: #2ea043;
+    .recent-item:hover {
+      background-color: #1f2937;
+      border-color: #58a6ff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(88, 166, 255, 0.15);
     }
+    .recent-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0; /* allows text-overflow to work in flex child */
+      flex: 1;
+      padding-right: 12px;
+    }
+    .recent-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #c9d1d9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .recent-path {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #8b949e;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .recent-meta {
+      font-size: 0.7rem;
+      color: #484f58;
+    }
+    .btn-remove {
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      font-size: 1.2rem;
+      cursor: pointer;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      line-height: 1;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .btn-remove:hover {
+      color: #ff7b72;
+      background-color: rgba(248, 81, 73, 0.1);
+    }
+
     .actions {
       display: flex;
-      gap: 1rem;
+      flex-direction: column;
+      gap: 16px;
     }
+    .icon {
+      width: 18px;
+      height: 18px;
+      stroke-width: 2;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #ffffff;
+      border: 1px solid rgba(240, 246, 252, 0.1);
+      padding: 14px 24px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+    .btn-primary {
+      background-color: #1f6feb;
+    }
+    .btn-primary:hover {
+      background-color: #388bfd;
+      box-shadow: 0 4px 12px rgba(56, 139, 253, 0.2);
+    }
+    .btn-success {
+      background-color: #238636;
+    }
+    .btn-success:hover {
+      background-color: #2ea043;
+      box-shadow: 0 4px 12px rgba(46, 160, 67, 0.2);
+    }
+
     .current-project {
-      margin-top: 2rem;
+      margin-top: 20px;
       font-family: monospace;
+      font-size: 0.8rem;
       padding: 10px;
-      background: #161b22;
+      background: #0d1117;
       border: 1px solid #30363d;
       border-radius: 6px;
       display: none;
+      word-break: break-all;
     }
     
     /* Modal Styles */
@@ -116,15 +296,43 @@
   </style>
 </head>
 <body>
-  <h1>Phaser NGE</h1>
-  <p>Narrative Game Engine Editor</p>
-  
-  <div class="actions">
-    <button id="btn-open" class="btn">Open Project Folder</button>
-    <button id="btn-new" class="btn" style="background-color: #1f6feb;">Create New Project</button>
+  <div class="launcher-card">
+    <header class="launcher-header">
+      <h1>Phaser NGE</h1>
+      <p>Narrative Game Engine Editor</p>
+    </header>
+    
+    <div class="launcher-content" id="launcher-content">
+      <!-- Left: Recent Projects -->
+      <section class="recent-projects-section">
+        <h2>Recent Projects</h2>
+        <div class="recent-list" id="recent-list">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- Right: Actions -->
+      <section class="actions-section">
+        <h2>Actions</h2>
+        <div class="actions">
+          <button id="btn-open" class="btn btn-primary">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            Open Project Folder
+          </button>
+          <button id="btn-new" class="btn btn-success">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Create New Project
+          </button>
+        </div>
+        <div id="current-project" class="current-project"></div>
+      </section>
+    </div>
   </div>
-  
-  <div id="current-project" class="current-project"></div>
 
   <dialog id="new-project-modal">
     <h2>Name your Project</h2>
@@ -134,7 +342,7 @@
     </div>
     <div class="modal-actions">
       <button id="btn-cancel" class="btn-secondary">Cancel</button>
-      <button id="btn-confirm" class="btn" style="background-color: #1f6feb; font-size: 1rem;">Create Project</button>
+      <button id="btn-confirm" class="btn btn-success" style="font-size: 1rem; width: auto; padding: 10px 20px;">Create Project</button>
     </div>
   </dialog>
 
