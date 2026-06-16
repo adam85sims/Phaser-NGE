@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "startScene": "start",
   "scenes": [
-    "start"
+    "start",
+    "node_test",
+    "node_test_sub",
+    "editor-test"
   ],
   "defaults": {
     "textSpeed": 40,
@@ -12,5 +15,7 @@
     "bgmVolume": 0.7,
     "sfxVolume": 1
   },
-  "animations": []
+  "animations": [
+    "test_anim"
+  ]
 }

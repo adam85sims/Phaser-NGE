@@ -65,11 +65,11 @@ export function render(container, app) {
   });
 
   container.querySelector('#btn-new-folder')?.addEventListener('click', async () => {
-    const name = prompt('New folder name:');
+    const name = await window.promptAsync('New folder name:');
     if (name) {
       const targetDir = _state.currentFolder ? `${_state.currentFolder}/${name}` : name;
       try {
-        await backend.request('/api/create-folder', { targetDir });
+        await backend.request('/api/create-folder', { targetPath: 'public/assets/' + targetDir });
         await _scanOnDisk();
       } catch(e) { alert('Error: ' + e.message); }
     }
@@ -183,7 +183,11 @@ function _renderTree() {
     const name = dir ? dir.split('/').pop() : 'assets (root)';
     const isSelected = _state.currentFolder === dir;
     html += `
-      <div onclick="window.__navFolder('${dir}')" style="cursor:pointer;padding:4px 8px;padding-left:${depth * 12 + 8}px;background:${isSelected ? 'var(--accent)' : 'transparent'};color:${isSelected ? 'white' : 'var(--text)'};border-radius:4px;font-size:12px;margin-bottom:2px;display:flex;align-items:center;gap:6px">
+      <div onclick="window.__navFolder('${dir}')" 
+           ondragover="event.preventDefault(); event.stopPropagation(); this.style.background='var(--accent)';" 
+           ondragleave="event.stopPropagation(); this.style.background='${isSelected ? 'var(--accent)' : 'transparent'}';"
+           ondrop="event.preventDefault(); event.stopPropagation(); this.style.background='${isSelected ? 'var(--accent)' : 'transparent'}'; window.__moveAsset(event, '${dir}')"
+           style="cursor:pointer;padding:4px 8px;padding-left:${depth * 12 + 8}px;background:${isSelected ? 'var(--accent)' : 'transparent'};color:${isSelected ? 'white' : 'var(--text)'};border-radius:4px;font-size:12px;margin-bottom:2px;display:flex;align-items:center;gap:6px">
         <span>📁</span> <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>
       </div>
     `;
@@ -230,7 +234,7 @@ function _renderGrid() {
     let thumb = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">📁</div>`;
     if (!isDir) {
       if (isImage) {
-        thumb = `<img src="/assets/${item.path}" style="width:100%;height:100%;object-fit:contain" loading="lazy" />`;
+        thumb = `<img src="/assets/${item.path}" style="width:100%;height:100%;object-fit:contain" draggable="false" loading="lazy" />`;
       } else if (isAudio) {
         thumb = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">🎵</div>`;
       } else {
@@ -242,7 +246,7 @@ function _renderGrid() {
       <div class="asset-card ${isSelected ? 'selected' : ''}" style="background:var(--bg-elevated);border-radius:6px;overflow:hidden;border:2px solid ${isSelected ? 'var(--accent)' : 'transparent'};cursor:pointer"
            onclick="window.__selectAsset('${item.path}')"
            ondblclick="${isDir ? `window.__navFolder('${item.path}')` : `window.open('/assets/${item.path}', '_blank')`}"
-           ${!isDir ? `draggable="true" ondragstart="event.dataTransfer.setData('application/json', JSON.stringify({path:'${item.path}', type:'${isImage?'image':'audio'}'}))"` : ''}>
+           ${isDir ? `ondragover="event.preventDefault(); event.stopPropagation(); this.style.borderColor='var(--accent)';" ondragleave="event.stopPropagation(); this.style.borderColor='transparent';" ondrop="event.preventDefault(); event.stopPropagation(); this.style.borderColor='transparent'; window.__moveAsset(event, '${item.path}')"` : `draggable="true" ondragstart="event.dataTransfer.setData('application/json', JSON.stringify({path:'${item.path}', type:'${isImage?'image':'audio'}'})); event.dataTransfer.setData('text/plain', JSON.stringify({path:'${item.path}', type:'${isImage?'image':'audio'}'}));"`}>
         <div style="aspect-ratio:1;background:var(--bg-base);padding:4px">
           ${thumb}
         </div>
@@ -258,6 +262,34 @@ window.__selectAsset = (path) => {
     _state.selectedAsset = item;
     _renderGrid();
     _renderDetailPanel();
+  }
+};
+
+window.__moveAsset = async (event, targetDir) => {
+  let dragDataStr = event.dataTransfer.getData('application/json');
+  if (!dragDataStr) dragDataStr = event.dataTransfer.getData('text/plain');
+  if (!dragDataStr) return;
+  try {
+    const dragData = JSON.parse(dragDataStr);
+    if (!dragData.path) return;
+    const sourcePath = dragData.path;
+    const sourceDir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
+    if (sourceDir === targetDir) return;
+
+    const filename = sourcePath.split('/').pop();
+    const newPath = targetDir ? `${targetDir}/${filename}` : filename;
+
+    await backend.request('/api/move-asset', {
+      sourcePath: 'public/assets/' + sourcePath,
+      targetPath: 'public/assets/' + newPath
+    });
+    
+    if (_state.selectedAsset?.path === sourcePath) {
+      _state.selectedAsset = null;
+    }
+    await _scanOnDisk();
+  } catch (e) {
+    console.warn('Move failed:', e);
   }
 };
 
@@ -309,7 +341,7 @@ function _renderDetailPanel() {
 window.__deleteAsset = async (path) => {
   if (confirm(`Delete ${path}? This cannot be undone.`)) {
     try {
-      await backend.request('/api/delete-asset', { targetPath: path });
+      await backend.request('/api/delete-asset', { targetPath: 'public/assets/' + path });
       _state.selectedAsset = null;
       await _scanOnDisk();
     } catch(e) { alert('Error deleting: ' + e.message); }

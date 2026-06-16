@@ -232,8 +232,13 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // F1–F3: jump to dev/test scenes (only if they exist in loaded data)
-    const devSceneHotkeys = { F1: 'sample', F2: 'test-conditions', F3: 'test-events' };
+    // F1–F4: jump to dev/test scenes (only if they exist in loaded data)
+    const devSceneHotkeys = {
+      F1: 'sample',
+      F2: 'test-conditions',
+      F3: 'test-events',
+      F4: 'node_test'
+    };
     Object.entries(devSceneHotkeys).forEach(([key, sceneId]) => {
       this.input.keyboard.on(`keydown-${key}`, () => {
         if (Data.getScene(sceneId)) {
@@ -334,7 +339,7 @@ export class GameScene extends Phaser.Scene {
   /* ── START SCENE ───────────────────────────── */
 
   _getStartScene() {
-    return Data.game?.startScene || 'sample';
+    return Data.game?.startScene || 'start';
   }
 
   /** Show a brief toast notification */

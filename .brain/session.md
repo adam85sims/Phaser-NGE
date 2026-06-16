@@ -1,3 +1,5 @@
-**Current Goal:** Completed Phase 3 (Runtime Improvements & Scoping) & Phase 4 (Visual Hierarchy).
-**Status:** Done.
-**Next Steps:** Handoff to Hermes Agent for Phase 5 (UX, Inspector improvements, Script Editor).
+**Current Goal:** Implement recent projects dashboard feature in the Electron launcher
+Status: Completed
+Next Steps:
+1. Present the recent projects feature to the user.
+2. Confirm the functionality works correctly.

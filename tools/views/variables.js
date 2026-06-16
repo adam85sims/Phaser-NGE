@@ -226,8 +226,8 @@ function _updateVarField(varName, field, value) {
 
 /* ─── ADD / DELETE ─────────────────────────────── */
 
-window.__varAdd = () => {
-  const name = prompt('Variable name:');
+window.__varAdd = async () => {
+  const name = await window.promptAsync('Variable name:');
   if (!name || _state.variables[name]) return name ? alert('Already exists') : null;
   _state.variables[name] = { type: 'boolean', default: false, description: '' };
   _markDirty();

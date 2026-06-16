@@ -60,8 +60,8 @@ export function render(container, context) {
   // Bind add button
   const addBtn = container.querySelector('#btn-add-anim');
   if (addBtn) {
-    addBtn.addEventListener('click', () => {
-      const id = prompt("Enter new animation ID (e.g. fade_in):");
+    addBtn.addEventListener('click', async () => {
+      const id = await window.promptAsync("Enter new animation ID (e.g. fade_in):");
       if (!id) return;
       if (editorState.animations[id]) {
          alert("Animation ID already exists.");

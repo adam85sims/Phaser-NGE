@@ -8,6 +8,22 @@ import { fetchJSON } from './utils.js';
 
 export const backend = {
   /**
+   * Generic API request wrapper
+   */
+  async request(url, body) {
+    const res = await fetch(url, {
+      method: body ? 'POST' : 'GET',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Request failed');
+    }
+    return res.json();
+  },
+
+  /**
    * Fetch project data files
    */
   async fetchGameConfig() {

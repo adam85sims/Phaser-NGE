@@ -13,17 +13,130 @@ Registry.registerNodeType('dialogue', {
       `<option value="${n.id}"${node.next===n.id?' selected':''}>${n.id}</option>`
     ).join('');
 
+    // Position options
+    const positions = ['left', 'center', 'right'];
+    const posOpts = positions.map(p =>
+      `<option value="${p}"${node.position===p?' selected':''}>${p}</option>`
+    ).join('');
+
     return `
-      <div class="form-group"><label>Speaker</label><select data-field="speaker">
+      <div class="form-group"><label>Speaker</label><select data-field="speaker" id="speaker-select">
         <option value="">(narration)</option>${speakerOpts}</select></div>
-      <div class="form-group"><label>Expression</label><input value="${node.expression||''}" data-field="expression"/></div>
-      <div class="form-row"><div class="form-group"><label>Z-Index</label><input type="number" value="${node.zIndex??0}" data-field="zIndex" data-type="number"/></div></div>
+      <div class="form-group"><label>Expression</label><select data-field="expression" id="expression-select">
+        <option value="">— none —</option></select></div>
+      <div class="form-group"><label>Position</label><select data-field="position">
+        <option value="">— default —</option>${posOpts}</select></div>
+      <div class="form-group">
+        <label>Background</label>
+        <select data-field="background" id="background-select">
+          <option value="">— none —</option>
+        </select>
+        <div id="background-thumb" style="margin-top:6px;min-height:60px;background:#0a0a1a;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+          ${node.background ? `<img src="/assets/backgrounds/${node.background}.png" style="max-width:100%;max-height:80px" />` : '<span style="color:#666;font-size:10px">No background</span>'}
+        </div>
+      </div>
+      <div class="form-group"><label>Z-Index</label><input type="number" value="${node.zIndex??0}" data-field="zIndex" data-type="number"/></div>
       <div class="form-group"><label>Text</label><textarea data-field="text">${(node.text||'').replace(/</g,'&lt;')}</textarea></div>
       <div class="form-row"><div class="form-group"><label>Auto</label><select data-field="autoAdvance">
         <option value="false">No</option><option value="true"${node.autoAdvance?' selected':''}>Yes</option></select></div>
       <div class="form-group"><label>Wait ms</label><input type="number" value="${node.waitTime||2000}" data-field="waitTime" data-type="number"/></div></div>
       <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>
     `;
+  },
+  bindEditor: (node, container, ctx, helpers) => {
+    const bgSelect = container.querySelector('#background-select');
+    const bgThumb = container.querySelector('#background-thumb');
+    const exprSelect = container.querySelector('#expression-select');
+    const speakerSelect = container.querySelector('#speaker-select');
+
+    // Fetch assets and populate background dropdown
+    if (bgSelect && ctx.backend) {
+      ctx.backend.listAssets().then(assets => {
+        // assets is a flat array of { name, path, type, ... }
+        const bgAssets = (Array.isArray(assets) ? assets : [])
+          .filter(f => f.path && f.path.startsWith('backgrounds/'))
+          .map(f => f.name.replace(/\.[^.]+$/, ''));
+        bgSelect.innerHTML = '<option value="">— none —</option>' +
+          bgAssets.map(k => `<option value="${k}"${k === node.background ? ' selected' : ''}>${k}</option>`).join('');
+
+        // Update thumbnail on change
+        bgSelect.addEventListener('change', () => {
+          helpers.captureUndoState();
+          node.background = bgSelect.value;
+          if (bgThumb) {
+            if (bgSelect.value) {
+              bgThumb.innerHTML = `<img src="/assets/backgrounds/${bgSelect.value}.png" style="max-width:100%;max-height:80px" />`;
+            } else {
+              bgThumb.innerHTML = '<span style="color:#666;font-size:10px">No background</span>';
+            }
+          }
+          helpers.markDirty();
+        });
+      }).catch(() => {
+        // Fallback to text input
+        if (bgSelect.parentElement) {
+          const fallback = document.createElement('input');
+          fallback.value = node.background || '';
+          fallback.dataset.field = 'background';
+          fallback.placeholder = 'Enter background key…';
+          fallback.addEventListener('change', () => {
+            helpers.captureUndoState();
+            node.background = fallback.value;
+            helpers.markDirty();
+          });
+          bgSelect.replaceWith(fallback);
+        }
+      });
+    }
+
+    // Build character → expressions map from portraits
+    const charExpressions = {};
+    if (ctx.characters) {
+      for (const [charId, charData] of Object.entries(ctx.characters)) {
+        if (charData.portraits) {
+          charExpressions[charId] = Object.keys(charData.portraits);
+        }
+      }
+    }
+
+    // Populate expression dropdown based on current speaker
+    const populateExpressions = (speaker) => {
+      const expressions = charExpressions[speaker] || [];
+      if (expressions.length === 0) {
+        exprSelect.innerHTML = '<option value="">— none —</option>';
+      } else {
+        exprSelect.innerHTML = '<option value="">— none —</option>' +
+          expressions.map(e => `<option value="${e}"${e === node.expression ? ' selected' : ''}>${e}</option>`).join('');
+      }
+    };
+
+    // Initial population
+    populateExpressions(node.speaker);
+
+    // Re-populate when speaker changes
+    if (speakerSelect) {
+      speakerSelect.addEventListener('change', () => {
+        helpers.captureUndoState();
+        node.speaker = speakerSelect.value;
+        populateExpressions(node.speaker);
+        // Clear expression if it's no longer valid
+        const validExprs = charExpressions[node.speaker] || [];
+        if (node.expression && !validExprs.includes(node.expression)) {
+          node.expression = '';
+          exprSelect.value = '';
+        }
+        helpers.markDirty();
+      });
+    }
+
+    // Expression change
+    if (exprSelect) {
+      exprSelect.addEventListener('change', () => {
+        helpers.captureUndoState();
+        node.expression = exprSelect.value;
+        helpers.markDirty();
+      });
+    }
   },
   executeRuntime: (node, controller) => {
     controller.showDialogue(node);
@@ -237,17 +350,20 @@ Registry.registerNodeType('event', {
     const assetSelect = container.querySelector('#ev-asset-select');
     if (assetSelect && ctx.backend) {
       ctx.backend.listAssets().then(assets => {
+        // assets is a flat array of { name, path, type, ... }
         const evType = node.eventType || 'bgm';
         let items = [];
-        if (evType === 'bgm')      items = (assets.music      || []).map(f => f.name.replace(/\\.[^.]+$/, ''));
-        else if (evType === 'sfx') items = (assets.sfx        || []).map(f => f.name.replace(/\\.[^.]+$/, ''));
-        else if (evType === 'bg_change') items = (assets.backgrounds || []).map(f => f.name.replace(/\\.[^.]+$/, ''));
+        const assetList = Array.isArray(assets) ? assets : [];
+        if (evType === 'bgm')      items = assetList.filter(f => f.path && f.path.startsWith('audio/bgm/')).map(f => f.name.replace(/\.[^.]+$/, ''));
+        else if (evType === 'sfx') items = assetList.filter(f => f.path && f.path.startsWith('audio/sfx/')).map(f => f.name.replace(/\.[^.]+$/, ''));
+        else if (evType === 'bg_change') items = assetList.filter(f => f.path && f.path.startsWith('backgrounds/')).map(f => f.name.replace(/\.[^.]+$/, ''));
 
         const current = node.eventValue || '';
         assetSelect.innerHTML = `<option value="">— select —</option>` +
           items.map(k => `<option value="${k}"${k === current ? ' selected' : ''}>${k}</option>`).join('');
 
         assetSelect.addEventListener('change', () => {
+          helpers.captureUndoState();
           node.eventValue = assetSelect.value;
           helpers.markDirty();
           helpers.dispatchRender();
@@ -259,6 +375,7 @@ Registry.registerNodeType('event', {
           fallback.dataset.field = 'eventValue';
           fallback.placeholder = 'Enter asset key…';
           fallback.addEventListener('change', () => {
+            helpers.captureUndoState();
             node.eventValue = fallback.value;
             helpers.markDirty();
           });

@@ -22,5 +22,17 @@
     "type": "string",
     "default": false,
     "description": "again - should probably be an array?"
+  },
+  "test_score": {
+    "type": "number",
+    "default": 0,
+    "description": "Used by the node-system test scene (docs/qa-node-system.md). Reset to 0 via set_variable.",
+    "min": 0,
+    "max": 999
+  },
+  "test_flag_bool": {
+    "type": "boolean",
+    "default": false,
+    "description": "Used by the node-system test scene. Toggled via set_variable operation=toggle."
   }
 }

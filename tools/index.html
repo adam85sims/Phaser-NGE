@@ -44,9 +44,27 @@
       </button>
     </div>
 
+    <div class="topbar-center">
+      <button class="icon-btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-redo" title="Redo (Ctrl+Shift+Z)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 10H11a5 5 0 00-5 5v2M21 10l-4-4M21 10l-4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
     <div class="topbar-right">
       <button class="icon-btn" id="btn-play" title="Play">
         <svg viewBox="0 0 20 20" fill="currentColor"><path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832l7-4a1 1 0 000-1.664l-7-4z"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-export" title="Export HTML5 Build">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </button>
       <button class="icon-btn" id="btn-settings" title="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -259,6 +277,42 @@
       </div>
     </div>
   </div>
+
+  <dialog id="settings-modal" class="editor-modal">
+    <div class="modal-header">
+      <h2>Project Settings</h2>
+      <button class="icon-btn-sm" id="btn-settings-close" title="Close"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="setting-group">
+        <label for="setting-project-name">Project Name</label>
+        <input type="text" id="setting-project-name" class="prop-text" placeholder="My Game">
+      </div>
+      <div class="setting-group">
+        <label>Game Resolution</label>
+        <div style="display:flex;gap:10px;">
+          <input type="number" id="setting-viewport-w" class="prop-text" placeholder="1280" style="width:100px;">
+          <span style="color:var(--text-muted);align-self:center;">x</span>
+          <input type="number" id="setting-viewport-h" class="prop-text" placeholder="720" style="width:100px;">
+        </div>
+      </div>
+      <div class="setting-group">
+        <label for="setting-text-speed">Default Text Speed (ms per char)</label>
+        <input type="range" id="setting-text-speed" min="10" max="100" step="5" value="40">
+      </div>
+      <div class="setting-group">
+        <label for="setting-volume-bgm">Default BGM Volume</label>
+        <input type="range" id="setting-volume-bgm" min="0" max="1" step="0.05" value="0.7">
+      </div>
+      <div class="setting-group">
+        <label for="setting-volume-sfx">Default SFX Volume</label>
+        <input type="range" id="setting-volume-sfx" min="0" max="1" step="0.05" value="1">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="btn-settings-save" class="btn btn-primary">Save Settings</button>
+    </div>
+  </dialog>
 
   <script type="module" src="app.js"></script>
 </body>

@@ -1,4 +1,4 @@
-import { editorState, markDirty } from './state.js';
+import { editorState, markDirty, captureUndoState } from './state.js';
 import { backend } from './shared/backend-adapter.js';
 import { Registry } from '../src/systems/Registry.js';
 
@@ -81,6 +81,7 @@ export function renderInspectorContent(container) {
   // Bind change events
   container.querySelectorAll('[data-field]').forEach(el => {
     el.addEventListener('change', (e) => {
+      captureUndoState(); // Capture before property change
       let val = e.target.value;
       if (el.dataset.type === 'number') val = Number(val);
       if (val === 'true') val = true;
@@ -107,6 +108,7 @@ export function renderInspectorContent(container) {
   if (typeDef && typeDef.bindEditor) {
     typeDef.bindEditor(node, container, ctx, {
       markDirty,
+      captureUndoState,
       dispatchRender: () => window.dispatchEvent(new CustomEvent('editor:render'))
     });
   }
@@ -232,6 +234,7 @@ function renderLayerInspector(container) {
   // Bind change events for layer fields
   container.querySelectorAll('[data-field][data-layer]').forEach(el => {
     const updateLayerField = (isFinalChange) => {
+      if (isFinalChange) captureUndoState(); // Capture before layer property change (on blur/Enter)
       let val = el.value;
       if (el.dataset.type === 'number') val = Number(val);
       

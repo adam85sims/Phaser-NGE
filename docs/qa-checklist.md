@@ -2,15 +2,18 @@
 
 These tests require a browser. They exercise the Phaser-rendering systems (DialogueSystem, CharacterSystem, AudioSystem) and the editor tool — things the automated unit tests can't cover.
 
+For a **node-by-node walkthrough** that exercises every node type (`dialogue`, `choice`, `condition`, `event`, `set_variable`, `timed_choice`, `random_branch`, `wait`, `animate`, `show_object`, `hide_object`, `camera`, `call_scene`, `macro`, `end`), see **[`docs/qa-node-system.md`](qa-node-system.md)**. Press **F4** in-game to jump to the dedicated `node_test` scene.
+
 ## Prerequisites
 
 ```bash
-cd narrative-engine
+cd Phaser-NGE
 npm run dev
 ```
 
 Game URL: `http://localhost:3000/`
-Editor URL: `http://localhost:3000/tools/dialogue-editor/`
+Editor URL: `http://localhost:3000/tools/`
+Node-system test scene: press **F4** in-game (after entering any scene)
 
 ---
 
@@ -18,10 +21,11 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 
 | # | Test | Expected | Pass/Fail |
 |---|------|----------|-----------|
-| 1.1 | Open `http://localhost:3000/` | Loading screen appears briefly, then fades into the game showing the sample scene dialogue "A calm evening settles over the city..." | ☐ |
+| 1.1 | Open `http://localhost:3000/` | Loading screen appears briefly, then fades into the game showing the `start` scene dialogue | ☐ |
 | 1.2 | Check browser console for errors | No JS errors, no CORS errors, no 404s for data files | ☐ |
-| 1.3 | Check Network tab for data loads | `game.json`, `characters.json`, `variables.json`, all scene files load with status 200 | ☐ |
+| 1.3 | Check Network tab for data loads | `game.json`, `characters.json`, `variables.json`, `theme.json`, all scene files (incl. `node_test`, `node_test_sub`), and `animations/test_anim.json` load with status 200 | ☐ |
 | 1.4 | Page refresh | Game reloads cleanly, no stale state from previous session | ☐ |
+| 1.5 | Press F4 in-game | Switches to the `node_test` scene (toast appears if not loaded — see Node System QA for details) | ☐ |
 
 ---
 
@@ -34,7 +38,7 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 | 2.3 | **Click/Space/Enter to advance** | After typewriter finishes, pressing Space/Enter or clicking advances to the next node | ☐ |
 | 2.4 | **Continue indicator** | After text finishes, a blinking ▼ arrow appears at bottom-right of text box | ☐ |
 | 2.5 | **Nameplate display** | "Lena" appears in blue for hero dialogue, "???" in orange for mystery_man, no nameplate for narrator | ☐ |
-| 2.6 | **Multiple dialogue nodes** | The sample scene walks through start → intro_hero → meet_stranger → stranger_speaks (check by clicking through) | ☐ |
+| 2.6 | **Multiple dialogue nodes** | The `start` scene walks through start → intro_hero → meet_stranger → stranger_speaks (check by clicking through) | ☐ |
 
 ---
 
@@ -56,7 +60,7 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 
 | # | Test | Expected | Pass/Fail |
 |---|------|----------|-----------|
-| 4.1 | Press F2 to load the condition test scene | Scene loads with "CONDITION TEST: Your courage is being tested." | ☐ |
+| 4.1 | Press F2 to load the condition test scene | Scene loads with "CONDITION TEST: Your courage is being tested." (Note: `test-conditions` scene is not currently registered in `data/game.json` — to test conditions, press F4 to use the `node_test` scene's `section_condition_true` and `section_condition_compound` nodes) | ☐ |
 | 4.2 | **Condition branch (true)** | courage defaults to 50, so `courage >= 50` is true → "BRAVE PATH: Your courage is strong." appears | ☐ |
 | 4.3 | **Condition branch (false)** | On the brave path, make a selection. If you select "Proceed carefully" (adds 5 courage), the final condition `courage >= 70` checks: 55 < 70 → "NORMAL ENDING" | ☐ |
 | 4.4 | **Chained conditions** | Two conditions in sequence: first courage check → choice → second courage check with different threshold | ☐ |
@@ -67,7 +71,7 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 
 | # | Test | Expected | Pass/Fail |
 |---|------|----------|-----------|
-| 5.1 | Press F3 to load the event test scene | Scene loads with "EVENT TEST: The city hums around you." | ☐ |
+| 5.1 | Press F3 to load the event test scene | Scene loads with "EVENT TEST: The city hums around you." (Note: `test-events` scene is not currently registered — to test events, press F4 to use the `node_test` scene's `section_event_bgm` through `section_event_bgm_stop` nodes) | ☐ |
 | 5.2 | **Camera shake** | Select "Camera shake (intense)" → the screen shakes noticeably | ☐ |
 | 5.3 | **Camera flash** | Select "Flash the screen" → brief white flash | ☐ |
 | 5.4 | **SFX event** | Select "Set variable + play SFX" → toast shows "⚡ sfx: alert" (no audio file loaded, so no sound plays — graceful fallback is acceptable) | ☐ |
@@ -92,7 +96,7 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 |---|------|----------|-----------|
 | 7.1 | **End text display** | When a scene ends, "To be continued..." (or other end text) appears centered on screen in gold, pulsing | ☐ |
 | 7.2 | **Scene transition (end → nextScene)** | Currently no scene has nextScene set — verify by checking all scene files (optional: add one and test) | ☐ |
-| 7.3 | **F-key scene switching** | F1 → sample scene. F2 → conditions test. F3 → events test. Each has a clean fade transition. | ☐ |
+| 7.3 | **F-key scene switching** | F1 → `sample`, F2 → `test-conditions`, F3 → `test-events`, F4 → `node_test`. F1–F3 are hardcoded IDs that no longer correspond to loaded scenes (they'll toast "Dev scene … not loaded") — F4 is the working test scene. Each has a clean fade transition. | ☐ |
 
 ---
 
@@ -114,7 +118,7 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 |---|------|----------|-----------|
 | 9.1 | **Variable mutation via choice** | Selecting "Who are you?" (setFlag: courage, setValue: 5) should increase courage from 50 to 55 | ☐ |
 | 9.2 | **Variable mutation via event** | The "Set variable + play SFX" choice in event test sets `alert_triggered = true` | ☐ |
-| 9.3 | **Variables persist across scenes** | Change courage in the sample scene, then switch to conditions test (F2) — the modified value should be used for conditions | ☐ |
+| 9.3 | **Variables persist across scenes** | Change courage in the `start` scene, then switch to `node_test` (F4) — the modified value should be used for conditions in the test scene | ☐ |
 
 ---
 
@@ -132,10 +136,10 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 
 | # | Test | Expected | Pass/Fail |
 |---|------|----------|-----------|
-| 11.1 | Open `http://localhost:3000/tools/dialogue-editor/` | Editor loads without errors. Shows a node graph canvas. | ☐ |
-| 11.2 | **Scene dropdown** | Dropdown lists available scenes (sample, test-conditions, test-events) | ☐ |
-| 11.3 | **Select a scene** | Selecting a scene displays its node graph with correct layout | ☐ |
-| 11.4 | **Node rendering** | Nodes render with correct colors: Blue (dialogue), Amber (choice), Purple (condition), Green (event), Grey (wait), Red (end) | ☐ |
+| 11.1 | Open `http://localhost:3000/tools/` | Editor v2 loads without errors. Shows the topbar with mode toggles (Scene / Menu / Splash / Script / Animations), a left outline, a center scene preview, and a right inspector. | ☐ |
+| 11.2 | **Scene dropdown** | The Scenes panel lists available scenes: `start`, `node_test`, `node_test_sub` | ☐ |
+| 11.3 | **Select a scene** | Selecting `node_test` displays its node graph with the correct layout | ☐ |
+| 11.4 | **Node rendering** | Nodes render with the colors per the table in `docs/qa-node-system.md` §"Test Inventory" | ☐ |
 | 11.5 | **Wire connections** | Nodes show connection lines between output ports (right) and input ports (left) | ☐ |
 | 11.6 | **Click a node** | Node properties appear in the right panel (text, speaker, choices, etc.) | ☐ |
 | 11.7 | **Edit node properties** | Change text in a dialogue node, verify it updates in the editor | ☐ |
@@ -176,11 +180,12 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 
 | Section | Automated Tests | Manual Tests | Status |
 |---------|----------------|--------------|--------|
-| VariableSystem | 52 | — | ✓ All pass |
-| SceneController | 61 | — | ✓ All pass |
-| SaveSystem | 18 | — | ✓ All pass |
 | DataLoader | 14 | — | ✓ All pass |
-| Game Load & Boot | — | 4 | ☐ |
+| VariableSystem | 56 | — | ✓ All pass |
+| SceneController | 92 | — | ✓ All pass |
+| SaveSystem | 18 | — | ✓ All pass |
+| SettingsSystem | 11 | — | ✓ All pass |
+| Game Load & Boot | — | 5 | ☐ |
 | Dialogue System | — | 6 | ☐ |
 | Choice System | — | 7 | ☐ |
 | Condition System | — | 4 | ☐ |
@@ -193,7 +198,8 @@ Editor URL: `http://localhost:3000/tools/dialogue-editor/`
 | Dialogue Editor | — | 13 | ☐ |
 | Error Handling | — | 7 | ☐ |
 | Performance | — | 3 | ☐ |
-| **Total** | **146** | **67** | |
+| **Cross-cutting checklist (this file)** | **191** | **68** | |
+| **Node System (`docs/qa-node-system.md`)** | — | **~80** | ☐ |
 
 ---
 

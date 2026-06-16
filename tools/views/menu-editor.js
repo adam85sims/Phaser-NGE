@@ -29,6 +29,8 @@ export function render(container, context) {
   _container = container;
   
   const menuConfig = getMenuConfig();
+  const vw = _context.data.game?.width || 1280;
+  const vh = _context.data.game?.height || 720;
 
   container.innerHTML = `
     <!-- Scene Toolbar for Background -->
@@ -37,9 +39,9 @@ export function render(container, context) {
       <button id="btn-menu-clear-bg" class="btn" style="background:var(--bg-elevated);border:1px solid var(--border);padding:4px 10px;font-size:11px;cursor:pointer;border-radius:4px;color:#ef4444" ${!menuConfig.background ? 'style="display:none"' : ''}>✕ Clear BG</button>
     </div>
 
-    <!-- The 1280x720 Editor Canvas -->
+    <!-- The Editor Canvas -->
     <div id="menu-canvas-wrapper" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-dark);overflow:auto;">
-      <div id="menu-canvas" style="position:relative;width:1280px;height:720px;background:#0a0a1a;transform-origin:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);overflow:hidden;">
+      <div id="menu-canvas" style="position:relative;width:${vw}px;height:${vh}px;background:#0a0a1a;transform-origin:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);overflow:hidden;">
         ${menuConfig.background ? `<img src="/assets/backgrounds/${menuConfig.background}.png" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0.6;" onerror="this.style.display='none'"/>` : ''}
         
         <!-- Elements -->
@@ -82,8 +84,10 @@ function _bindCanvasEvents() {
   const updateScale = () => {
     if (!wrapper || !canvas) return;
     const padding = 40;
-    const scaleX = (wrapper.clientWidth - padding) / 1280;
-    const scaleY = (wrapper.clientHeight - padding) / 720;
+    const vw = _context?.data?.game?.width || 1280;
+    const vh = _context?.data?.game?.height || 720;
+    const scaleX = (wrapper.clientWidth - padding) / vw;
+    const scaleY = (wrapper.clientHeight - padding) / vh;
     const scale = Math.min(1, scaleX, scaleY);
     canvas.style.transform = `scale(\${scale})`;
     canvas.dataset.scale = scale;

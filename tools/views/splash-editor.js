@@ -29,6 +29,8 @@ export function render(container, context) {
   _container = container;
   
   const config = getSplashConfig();
+  const vw = _context.data.game?.width || 1280;
+  const vh = _context.data.game?.height || 720;
 
   container.innerHTML = `
     <!-- Top toolbar -->
@@ -42,9 +44,9 @@ export function render(container, context) {
       <button id="btn-splash-play" class="btn" style="background:var(--bg-elevated);border:1px solid var(--border);padding:4px 10px;font-size:11px;cursor:pointer;border-radius:4px;color:#00ccff">▶ Preview Animation</button>
     </div>
 
-    <!-- The 1280x720 Editor Canvas -->
+    <!-- The Editor Canvas -->
     <div id="splash-canvas-wrapper" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-dark);overflow:auto;opacity:${config.enabled ? '1' : '0.5'};pointer-events:${config.enabled ? 'auto' : 'none'};">
-      <div id="splash-canvas" style="position:relative;width:1280px;height:720px;background:${config.background};transform-origin:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);overflow:hidden;display:flex;align-items:center;justify-content:center;">
+      <div id="splash-canvas" style="position:relative;width:${vw}px;height:${vh}px;background:${config.background};transform-origin:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);overflow:hidden;display:flex;align-items:center;justify-content:center;">
         ${config.logo ? `<img id="splash-logo-img" src="/assets/backgrounds/${config.logo}.png" style="transform:scale(${config.logoScale});max-width:100%;max-height:100%;object-fit:contain;" onerror="this.src='/assets/characters/${config.logo}.png'; this.onerror=null;"/>` : '<span style="color:#ffffff44;font-family:monospace;">(No Logo Selected)</span>'}
       </div>
     </div>
@@ -61,8 +63,10 @@ function _bindCanvasEvents() {
   const updateScale = () => {
     if (!wrapper || !canvas) return;
     const padding = 40;
-    const scaleX = (wrapper.clientWidth - padding) / 1280;
-    const scaleY = (wrapper.clientHeight - padding) / 720;
+    const vw = _context?.data?.game?.width || 1280;
+    const vh = _context?.data?.game?.height || 720;
+    const scaleX = (wrapper.clientWidth - padding) / vw;
+    const scaleY = (wrapper.clientHeight - padding) / vh;
     const scale = Math.min(1, scaleX, scaleY);
     canvas.style.transform = `scale(\${scale})`;
     canvas.dataset.scale = scale;

@@ -1,0 +1,99 @@
+{
+  "id": "editor-test",
+  "entryNode": "dialogue_1",
+  "background": null,
+  "layers": [
+    {
+      "id": "bg",
+      "type": "background",
+      "asset": "backgrounds/BG_throne_00001_.png",
+      "x": 640,
+      "y": 360,
+      "scale": 1,
+      "zIndex": 1,
+      "opacity": 1
+    }
+  ],
+  "nodes": [
+    {
+      "id": "dialogue_1",
+      "type": "dialogue",
+      "speaker": "Elena",
+      "expression": "neutral",
+      "position": "left",
+      "text": "Welcome to the throne room. This is a test scene to verify the editor UX improvements.",
+      "next": "dialogue_2",
+      "x": 0,
+      "y": 100
+    },
+    {
+      "id": "dialogue_2",
+      "type": "dialogue",
+      "speaker": "Elena",
+      "expression": "smile",
+      "position": "left",
+      "text": "Now I'm smiling! The expression dropdown should update when I change speakers.",
+      "next": "dialogue_3",
+      "x": 200,
+      "y": 200
+    },
+    {
+      "id": "dialogue_3",
+      "type": "dialogue",
+      "speaker": "Lyra",
+      "expression": "elf",
+      "position": "center",
+      "text": "I'm Lyra, an elf. Notice how my expression options are different from Elena's.",
+      "next": "dialogue_4",
+      "x": 400,
+      "y": 100
+    },
+    {
+      "id": "dialogue_4",
+      "type": "dialogue",
+      "speaker": "Marcus",
+      "expression": "stern",
+      "position": "right",
+      "text": "And I'm Marcus. We're all positioned differently on screen.",
+      "next": "choice_1",
+      "x": 660,
+      "y": 80
+    },
+    {
+      "id": "choice_1",
+      "type": "choice",
+      "prompt": "What would you like to do next?",
+      "choices": [
+        {
+          "text": "Change the background",
+          "next": "dialogue_5"
+        },
+        {
+          "text": "End the scene",
+          "next": "end_1"
+        }
+      ],
+      "x": 320,
+      "y": 300
+    },
+    {
+      "id": "dialogue_5",
+      "type": "dialogue",
+      "speaker": "Elena",
+      "expression": "neutral",
+      "position": "left",
+      "background": "Lakeside_Sunset_1920x1080",
+      "text": "The background just changed! You can see the thumbnail preview in the editor.",
+      "next": "end_1",
+      "x": 600,
+      "y": 200
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "text": "Test scene complete. All editor UX features working!",
+      "x": 800,
+      "y": 300
+    }
+  ]
+}

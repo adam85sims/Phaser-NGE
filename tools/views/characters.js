@@ -286,8 +286,8 @@ window.__charRename = (oldId, newId) => {
   _refresh();
 };
 
-window.__charAdd = () => {
-  const name = prompt('Character name:');
+window.__charAdd = async () => {
+  const name = await window.promptAsync('Character name:');
   if (!name) return;
   const id = name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
   if (_state.characters[id]) return alert('Character ID already exists');
@@ -320,11 +320,11 @@ window.__charDuplicate = (id) => {
   _refresh();
 };
 
-window.__charAddExpression = (id) => {
+window.__charAddExpression = async (id) => {
   const c = _state.characters[id];
   if (!c) return;
   if (!c.portraits) c.portraits = {};
-  const name = prompt('Expression name:', 'happy');
+  const name = await window.promptAsync('Expression name:', 'happy');
   if (!name || c.portraits[name]) return name ? alert('Already exists') : null;
   c.portraits[name] = '';
   _syncToApp();

@@ -4,7 +4,17 @@ dist/
 *.log
 .env
 .env.local
-*.deb
-*.rpm
-*.AppImage
 
+# Electron / build artifacts
+release/
+out/
+dist-electron/
+*.rpm
+*.deb
+*.AppImage
+*.dmg
+*.exe
+*.zip
+
+# Agent / Tooling
+.crush/
