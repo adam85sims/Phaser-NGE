@@ -8,6 +8,7 @@ import { SaveSystem } from '../systems/SaveSystem.js';
 import { AudioSystem } from '../systems/AudioSystem.js';
 import { Settings } from '../systems/SettingsSystem.js';
 import { LayerSystem } from '../systems/LayerSystem.js';
+import { LayoutSystem } from '../systems/LayoutSystem.js';
 
 /**
  * GameScene — the main gameplay loop.
@@ -27,6 +28,9 @@ export class GameScene extends Phaser.Scene {
 
     // Background layer (depth 0)
     this.layers = new LayerSystem(this);
+
+    // UI layout system — applies named layouts (theme + layer objects)
+    this.layouts = new LayoutSystem(this);
 
     // ── Initialize systems ──
     this.vars = new VariableSystem();
@@ -85,6 +89,11 @@ export class GameScene extends Phaser.Scene {
       this.layers.loadSceneLayers(data.layers, data.background);
       this.cameras.main.fadeIn(400, 0, 0, 0);
       if (data.music) this.audio.playBGM(data.music);
+
+      // Apply layout if the scene specifies one
+      if (data.layout) {
+        this.layouts.apply(data.layout, { fade: true });
+      }
 
       // Auto-save on scene transition (slot 9)
       this.saveSys.autoSave();

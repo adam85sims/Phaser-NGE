@@ -8,6 +8,8 @@ export const Data = {
   characters: null,
   variables: null,
   scenes: {},
+  animations: {},
+  layouts: {},
   theme: null,
 
   getScene(id) {
@@ -16,6 +18,10 @@ export const Data = {
 
   getCharacter(id) {
     return this.characters?.[id] || null;
+  },
+
+  getLayout(id) {
+    return this.layouts[id] || null;
   },
 
   getDefaultTextSpeed() {

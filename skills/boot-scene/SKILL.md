@@ -1,11 +1,11 @@
 ---
 name: boot-scene
-description: "Initial scene that loads all game data JSON files using fetch() instead of Phaser's loader (avoids Vite path issues). Generates procedural UI textures. Populates the global Data store, then transitions to GameScene. Related triggers: boot, initialization, data loading, procedural textures."
+description: "Initial scene that loads all game data JSON files using fetch() (avoids Vite path issues). Dynamically discovers scenes from game.scenes array, preloads audio and images, generates procedural UI textures, populates the global Data store, checks nge_debug_start for editor play-from-here, then transitions to SplashScene/MenuScene/GameScene. Related triggers: boot, initialization, data loading, procedural textures, debug start, asset preloading, animation loading."
 ---
 
 # BootScene
 
-> The first Phaser scene to run. Fetches all game data from `/data/` using `fetch()` with absolute paths, populates the `Data` store, generates procedural textures, then hands off to `GameScene`.
+> The first Phaser scene to run. Fetches all game data from `/data/` using `fetch()` with absolute paths, populates the `Data` store, generates procedural textures, preloads audio and images referenced by scenes, then hands off to the appropriate next scene (Splash → Menu → Game, or direct to GameScene for debug starts).
 
 **Source:** `src/scenes/BootScene.js`
 **Related skills:** `../data-loader/SKILL.md`, `../game-scene/SKILL.md`
@@ -19,59 +19,40 @@ description: "Initial scene that loads all game data JSON files using fetch() in
 ## Lifecycle
 
 ### `preload()`
-Generates procedural textures used by the game:
-- `ui_continue` — a small cyan arrow for the continue indicator
+Generates procedural textures:
+- `ui_continue` — 32×16 cyan arrow for the continue indicator
+- Any other textures needed before scenes load
 
-### `create()`
+### `create()` (async)
 1. Shows "LOADING..." text centered on screen
-2. Fetches all data files in parallel with `Promise.all`:
-   - `/data/game.json`
-   - `/data/characters.json`
-   - `/data/variables.json`
-   - `/data/scenes/sample.json`
-   - `/data/scenes/test-conditions.json`
-   - `/data/scenes/test-events.json`
-3. Each fetch checks `r.ok` and throws with status code on failure
-4. Populates `Data.game`, `Data.characters`, `Data.variables`, `Data.scenes`
-5. Ensures `Data.game.scenes` includes all loaded scene IDs
-6. Destroys loading text
-7. Transitions: `this.scene.start('GameScene')`
+2. Fetches data files:
+   - `/data/game.json` — required
+   - `/data/characters.json` — required
+   - `/data/variables.json` — required
+   - `/data/theme.json` — optional (fetch errors are swallowed)
+3. **Dynamically iterates** `game.scenes[]` to fetch each scene file: `/data/scenes/{id}.json`
+4. **Dynamically iterates** `game.animations[]` to fetch each animation: `/data/animations/{id}.json`
+5. Populates `Data.game`, `Data.characters`, `Data.variables`, `Data.theme`, `Data.scenes[id]`, `Data.animations[id]`
+6. **SafeFetchJson** — any fetch response that starts with `<` (HTML fallback page from Vite 404) is silently ignored with a console.warn instead of crashing
+7. **Image preloading** — walks all scene layers and character portraits, fetches images as blobs, creates `Image` objects, and caches them as Phaser textures. Missing images log a warning and continue.
+8. **Audio preloading** — walks all scene/event nodes for `bgm`/`sfx` event values, probes extensions via HEAD, registers via `this.load.audio()`, awaits `load.start()`. Missing audio emits a one-time warning.
+9. Destroys loading text
+10. Checks `nge_debug_start` in localStorage (set by editor's "Play from here" feature) — if present, parses `{ sceneId, nodeId }`, clears the key, and transitions directly to `GameScene` with debug params
+11. Otherwise transitions to `SplashScene` (if `theme.ui.splash.enabled`) or `MenuScene`
 
 ### Error Handling
+If any required fetch fails, the loading text changes to `"LOAD ERROR: {message}"` in red. `theme.json` errors are silently swallowed (theme is optional).
 
-If any fetch fails, the loading text changes to `"LOAD ERROR: {message}"` in red and logs to console. The game doesn't transition.
+## Debug Start (Play from Editor)
 
-### Audio Preloading
-
-After scenes are populated, `BootScene` walks every scene and registers audio files with the Phaser loader:
-
-- `scene.music` (legacy scene-level BGM)
-- `event` nodes with `eventType: 'bgm'` or `'sfx'` and a non-empty `eventValue`
-
-Each unique key is HEAD-probed at `/assets/audio/{bgm,sfx}/<key>.<ext>` for `mp3, ogg, wav, opus, m4a` (in order), and the first match is registered via `this.load.audio()`. The Phaser loader is then started and awaited before the scene transitions out — so by the time `GameScene` mounts, every referenced audio file is in `scene.cache.audio` and `AudioSystem.playBGM/playSFX` will find them. Missing files emit a `console.warn` but do not block boot.
-
-## Procedural Textures
-
-Generated in `preload()`:
-
-```js
-// ui_continue — 32×16 cyan arrow
-_textures.createCanvas('ui_continue', 32, 16)
-// draw triangle, call .refresh()
-```
-
-## Adding a New Scene
-
-To register a new scene, the user must:
-1. Create the scene JSON in `data/scenes/{id}.json`
-2. Add the ID to `data/game.json`'s `"scenes"` array
-3. **Also add a `fetch()` call in `BootScene.create()`** for the new scene
-
-Step 3 is manual because BootScene currently fetches each scene explicitly rather than reading the scene list dynamically.
+The editor's "Play from here" feature writes `localStorage.nge_debug_start` as JSON `{ sceneId, nodeId }` before opening the game. BootScene reads and clears this key, then starts `GameScene` directly with `{ loadScene: sceneId, nodeId }`.
 
 ## Gotchas
 
-- **Hardcoded scene fetches** — BootScene currently fetches exactly 3 scene files. New scenes require adding another `fetch()` call. A future improvement would dynamically iterate `game.scenes` and fetch each.
-- **`fetch()` not Phaser loader** — intentional. Phaser's built-in JSON loader has path resolution issues with Vite's dev server. Always use `fetch()` with absolute paths from the project root.
-- **Error is thrown, not returned** — failed fetches throw with a status-code message, caught by the outer try/catch. The user sees a red error on screen.
-- **`Data.game.scenes` is synced** — BootScene ensures the array includes all loaded scene IDs even if the JSON didn't have them. This keeps the editor's scene list accurate.
+- **`fetch()` not Phaser loader** — intentional. Phaser's built-in JSON loader has path resolution issues with Vite's dev server. Always use `fetch()` with absolute paths.
+- **Auto-scene discovery** — BootScene dynamically iterates `Data.game.scenes`, so adding a new scene is just: create the JSON + register ID in `game.json`. No code changes needed.
+- **`theme.json` is optional** — fetch errors for theme are silently swallowed. Missing theme → hardcoded fallback layouts.
+- **`safeFetchJson` handles 404s gracefully** — Vite's dev server intercepts 404s and returns `index.html` (starts with `<`). `safeFetchJson` checks for this and returns null instead of crashing.
+- **Audio preloading is automatic** — walks every scene and registers `eventType: 'bgm'` / `'sfx'` event values. Extensions probed in order: `mp3, ogg, wav, opus, m4a`.
+- **Images use raw asset keys** — NOT prefixed `bg_`. The `bg_` prefix is only for theme splash/menu backgrounds. Scene layers and characters use the raw path as the key.
+- **`nge_debug_start` is cleared on read** — prevents stale debug starts on page reload.

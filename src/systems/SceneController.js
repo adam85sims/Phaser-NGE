@@ -48,7 +48,8 @@ export class SceneController {
         sceneId: scene.id,
         background: scene.background,
         layers: scene.layers,
-        music: scene.music
+        music: scene.music,
+        layout: scene.layout || null
       });
     }
 

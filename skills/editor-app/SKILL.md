@@ -1,127 +1,127 @@
 ---
 name: editor-app
-description: "The integrated editor application (tools/app.js, tools/index.html). A single-page app that manages shared state, view routing, localStorage persistence, and project export/import. Views are modules in tools/views/ that export init/render/destroy. Related triggers: editor application, project management, view routing, localStorage persistence, export project."
+description: "The integrated editor v2 application (tools/index.html + tools/app.js + tools/inspector.js + tools/graph.js + tools/state.js + tools/editor-backend.js + tools/views/*.js). A single-page app with multi-mode support (Scene/Menu/Splash/Script/Animations), registry-driven inspector, backend API for disk persistence, asset browser with upload/DnD, transform gizmos, panel resizing, and project validation. Related triggers: editor application, project management, view routing, backend API, asset management, graph editor, inspector, scene composer, animation editor, node registry."
 ---
 
-# Editor Application (App Shell)
+# Editor Application (Editor v2)
 
-> The integrated editor is a standalone SPA built on vanilla JS. It manages a shared project state, routes between 8 tool views, auto-saves to localStorage, and provides project export/import. The dialogue editor is accessible as a view within this app or standalone.
+> The unified editor SPA for Phaser-NGE. Built on vanilla JS with a multi-mode architecture (Scene / Menu / Splash / Script / Animations). Integrates a registry-driven node type system shared with the runtime, a backend API for disk persistence (not localStorage), an asset browser with upload and drag-and-drop, transform gizmos on the scene canvas, interactive panel resizing, and save-time validation.
 
-**Shell:** `tools/index.html` + `tools/app.js`
+**Shell:** `tools/index.html` + `tools/app.js` (+ `tools/app.css`)
+**Node Graph:** `tools/graph.js`
+**Inspector:** `tools/inspector.js`
+**State:** `tools/state.js`
+**Backend:** `tools/editor-backend.js` (Vite plugin)
 **Views:** `tools/views/*.js`
-**Related skill files:** `../overview/SKILL.md` (for the two-person workflow)
+**See also:** `docs/editor-architecture/` — full architecture spec for the ongoing refactor
 
 ## Architecture
 
-### App State
+### Modes (topbar buttons)
 
+| Mode | View File | Purpose |
+|------|-----------|---------|
+| **Scene** | `views/scene-composer.js` + `views/scenes.js` | Node-graph, layer/object preview, outline hierarchy |
+| **Menu** | `views/menu-editor.js` | Title screen layout editor |
+| **Splash** | `views/splash-editor.js` | Splash screen configuration |
+| **Script** | `views/script-editor.js` | Monaco-powered JSON/script editor |
+| **Animations** | `views/animations.js` | Keyframe animation timeline editor |
+| **Assets** | `views/assets.js` | File browser, upload, drag-to-canvas |
+| **Characters** | `views/characters.js` | Character/portrait manager |
+| **Variables** | `views/variables.js` | Flag/counter definitions |
+| **Settings** | `views/settings.js` | Editor preferences |
+
+### Core Files
+
+#### `app.js` — Editor Shell
+- Boots the workspace, manages topbar event bindings
+- Renders outline (`renderOutline()`), workspace (`renderWorkspace()`), scene preview (`renderScenePreview()`)
+- Implements transform gizmos (Move, Scale, Rotate) on the canvas viewport
+- Handles drag-and-drop from asset browser to canvas
+- Interactive panel resizing handles
+- Wires play-from-editor: `window.__playFromNode()` calls `forceSave()`, sets `localStorage.nge_debug_start`, opens `/`
+
+#### `graph.js` — Node Graph Canvas
+- Pan/zoom with mouse and scrollwheel
+- Draws nodes as colored boxes with connection ports
+- Hit-test for click/drag selection and connection editing
+- `renderCanvas()` wrapped in try/catch to prevent per-frame crashes
+- Node colors come from `Registry.getNodeType(node.type).color`
+
+#### `inspector.js` — Context-Sensitive Property Panel
+- Driven by `Registry` — for a selected node, calls `typeDef.renderEditor(node, ctx)` which returns HTML
+- Complex node types (`choice`, `event`, `macro`) implement `bindEditor(node, container, ctx, helpers)` for post-render event wiring
+- Context-aware fields: event node's inspector shows asset dropdown for BGM/SFX populated from `/api/list-assets`, volume slider, or camera value inputs depending on `eventType`
+- Switching eventType dispatches `inspector:refresh` to re-render
+- Character portrait dropdown populated dynamically from expressions map
+- Background dropdown with thumbnail preview for dialogue nodes
+
+#### `state.js` — Editor State
+- `editorState` singleton: modules, selection, viewport, save tracking
+- `loadProjectData()` — fetches all project data from `/data/*.json`
+- `forceSave()` — POSTs to `/api/save`
+- Debounced auto-save timer
+
+#### `editor-backend.js` — Vite Plugin
+All under `/api/`:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/save` | POST | Write all project files to disk. **Validates** for missing node references and missing assets. Returns `{ success, warnings }`. |
+| `/api/list-assets` | GET | Recursive scan of `public/assets/` → `{ name, path, type, size, modified }` |
+| `/api/upload-asset` | POST | `{ targetDir, filename, base64 }` → write to disk |
+| `/api/delete-asset` | POST | `{ targetPath }` → rm file/dir (rejects `..` paths) |
+| `/api/project/new` | POST | Wipes data dirs and writes fresh template |
+| `/api/create-folder` | POST | `{ targetPath }` → mkdir (project-relative, rejects `..`) |
+| `/api/create-file` | POST | `{ targetPath, content }` → write file |
+
+Save payload: `{ game, characters, variables, theme, scenes: {id: data}, animations: {id: data} }`. Scenes/animations arrays are **cleared and rewritten** each save (deletions honored).
+
+### View Modules (module contract)
+Each view in `tools/views/` exports:
 ```js
-export const app = {
-  data: {
-    game: null,       // game.json content
-    characters: null, // characters.json content
-    variables: null,  // variables.json content
-    scenes: {}        // { sceneId: { data: sceneJSON } }
-  },
-  stats: {
-    sceneCount, nodeCount, wordCount, choiceCount,
-    charCount, varCount, recentScenes
-  },
-  currentView: null,
-  views: {},  // registered view modules
-  el: {}      // cached DOM refs
-}
+export function init(app) {}          // one-time setup
+export function render(container) {}  // called when view becomes active
+export function destroy() {}          // cleanup (optional)
 ```
+Views are registered in `app.js` and switched via `navigateTo(viewId)`.
 
-### View Registration
+### Event System
+The editor uses `CustomEvent` on `window`:
 
-Each view module exports:
-- `init(app)` — called once on startup
-- `render(container, app)` — called when the view becomes active
-- `destroy()` — called when leaving the view (optional)
+| Event | Payload | Purpose |
+|-------|---------|---------|
+| `editor:render` | — | Full re-render (firehose — being phased out for granular events) |
+| `editor:dirty` | — | Mark project as having unsaved changes |
+| `editor:saved` | — | Save complete notification |
+| `scene:changed` | — | Scene data changed |
+| `scene:background-changed` | — | Background asset changed |
+| `scene:node-changed` | `{ nodeId }` | Node properties changed |
+| `scene:layer-changed` | `{ layerId }` | Layer properties changed |
+| `selection:changed` | `{ type, id }` | Selection changed in outline/graph |
+| `inspector:refresh` | — | Force re-render the inspector panel |
+| `editor:open-assets` | `{ filter? }` | Open asset browser with optional filter |
 
-Register with `registerView(name, module)` in `index.html`'s `<script type="module">`.
+### Editor → Game Bridge
+- **Play from editor**: `window.__playFromNode(nodeId)` → `forceSave()` → `localStorage.nge_debug_start = { sceneId, nodeId }` → open `/`
+- **Save button** (`btn-save`) → `forceSave()` → POST to `/api/save`
 
-### Navigation
-
-```js
-navigateTo(viewId)
-```
-
-1. Calls `destroy()` on current view
-2. Updates sidebar active state and breadcrumb
-3. Sets `container.innerHTML` to a spinner
-4. In `requestAnimationFrame`, calls the new view's `render()`
-
-Error handling: if `render()` throws, the error is caught and a user-friendly error view is displayed.
-
-### Nav Configuration
-
-```js
-const navConfig = [
-  { id: 'dashboard',    icon: '◈', label: 'Dashboard' },
-  { id: 'scenes',       icon: '✍', label: 'Scenes' },
-  { id: 'dialogue',     icon: '◇', label: 'Dialogue Editor' },
-  { id: 'characters',   icon: '👤', label: 'Characters' },
-  { id: 'variables',    icon: '📊', label: 'Variables' },
-  { id: 'assets',       icon: '🖼', label: 'Assets' },
-  { id: 'layouts',      icon: '🎬', label: 'Layouts' },
-  { id: 'settings',     icon: '⚙', label: 'Settings' },
-]
-```
-
-## Persistence
-
-### Auto-Save (Debounced)
-
-- `__markProjectDirty()` — marks state as dirty, adds `.dirty` class to Save button, schedules save in 2s
-- `__saveProject()` — immediately persists to localStorage, shows "✓ Saved" flash on button
-- `_finaliseSave()` — shared helper: persists, clears dirty flag, removes `.dirty` class
-- `pagehide` event — ensures pending saves complete on tab close
-
-Storage key: `localStorage['narrative_engine_project']`
-
-### Export
-
-`__exportProject()` — serializes the entire project to a downloadable JSON bundle via browser save dialog.
-
-### Import
-
-`__openImportProject()` / `__importProject(file)` — reads a project bundle, validates version, prompts for confirmation if current project has content, applies and navigates to dashboard.
-
-## Boot Sequence
-
-1. Cache DOM refs in `app.el`
-2. Render sidebar nav items from `navConfig`
-3. Bind import file input
-4. Load project: prefer localStorage (user's working session) over disk fetch (sample defaults)
-5. Navigate to dashboard (or follow URL hash)
-6. Listen for hash changes
-
-## Save Button
-
-A `💾 Save` button is present in the top bar on all views:
-
-| State | Visual | When |
-|-------|--------|------|
-| Default | Dim text, transparent border | No unsaved changes |
-| `.dirty` | Cyan accent glow | Unsaved changes exist |
-| `.saved` | Green flash for 1.5s | Just saved |
-
-## New Project Flow
-
-1. Click "✦ New Project" → modal appears with title field
-2. Enter title, click "Create Project" →
-   - Blank project template created in memory
-   - Saved to localStorage
-   - Download triggered (browser save dialog) for disk storage
-   - Dashboard shown with fresh state
+### Key Features
+- **Transform Gizmos**: Move, Scale, Rotate handles on canvas viewport. Drag delta calculated relative to viewport zoom/pan.
+- **Panel Resizing**: Drag handles between panels (outline/inspector/canvas).
+- **Asset Drag-and-Drop**: Drag files from asset browser → canvas creates layers. Asset paths prefixed with `/assets/` for correct resolution.
+- **Animation Timeline Editor**: Pure HTML/CSS DOM loop (`requestAnimationFrame`) simulating Phaser tweens for 1:1 preview.
+- **Script Mode**: Monaco editor for raw JSON editing.
+- **Save Validation**: `/api/save` checks for orphaned nodes and missing assets before writing.
 
 ## Gotchas
 
-- **`navigateTo` uses `requestAnimationFrame`** — this lets the spinner render before the (potentially synchronous) view render runs. If a view's `render()` is expensive, the user sees a brief spinner.
-- **View `destroy()` is optional** — if not defined, `navigateTo` skips it gracefully.
-- **Hash-based routing** — `window.location.hash` drives view selection. The boot sequence reads the hash to restore the last-visited view after page load. `hashchange` events are listened to for browser back/forward.
-- **Import replaces current project** — the user is prompted with `confirm()` if the current project has any content. No undo is available.
-- **Storage schema version** — `STORAGE_VERSION = 1`. Import validates this and rejects mismatched versions with an alert.
-- **Views that write to `app.data`** should call `__markProjectDirty()` so auto-save and the Save button stay in sync.
+- **`navigateTo()` uses `requestAnimationFrame`** — lets spinner render before view render runs.
+- **View `destroy()` is optional** — skipped gracefully if undefined.
+- **Functions from innerHTML must be on `window.*`** — Vite wraps inline `<script>` in module scope. Editor uses `window.__playFromNode`, `window.__setActiveScene`, etc.
+- **Asset path prefix** — when dragging from asset browser to canvas, paths must be prefixed with `/assets/` for correct CSS `url()` resolution (browser resolves relative to `/tools/` otherwise).
+- **`0` is falsy in `||` fallback** — when parsing float values for CSS transforms, use explicit `isNaN(parseFloat(val))` instead of `val || defaultValue`.
+- **LayerSystem.layers is a plain object** — `this.layers.layers[targetId]`, not `.get()`.
+- **`registerNodeType` is additive** — new node types can be added by importing a file that calls `Registry.registerNodeType()` from `main.js` or `app.js`.
+- **Save is NOT mocked** — it POSTs to `/api/save`. The old README's "save is mocked" claim is stale.
+- **`nge_editor_data` localStorage key is removed** — editor only reads/writes via `/api/save`.

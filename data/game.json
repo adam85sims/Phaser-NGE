@@ -9,6 +9,9 @@
     "node_test_sub",
     "editor-test"
   ],
+  "layouts": [
+    "default_dialogue"
+  ],
   "defaults": {
     "textSpeed": 40,
     "autoAdvance": false,

@@ -1,6 +1,7 @@
 {
   "id": "start",
   "entryNode": "start",
+  "layout": "default_dialogue",
   "background": null,
   "music": null,
   "nodes": [

@@ -108,6 +108,20 @@ Everything your story needs lives in the `data/` folder:
 
 ---
 
+## UI Editor (New!)
+
+There is also a new UI editor for the engine available in `packages/ui-editor`. **It's usable, but like the engine, it's under heavy development.**
+
+To run the UI editor:
+
+```bash
+cd packages/ui-editor
+npm install
+npm run dev
+```
+
+---
+
 ## Writing Scenes Directly (No Editor)
 
 You don't need the editor. Scene files are plain JSON. Create `data/scenes/my_scene.json`:

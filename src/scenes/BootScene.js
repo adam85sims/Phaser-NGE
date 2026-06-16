@@ -76,6 +76,21 @@ export class BootScene extends Phaser.Scene {
 
       const animResults = await Promise.all(animFetches);
 
+      // Step 4: Fetch all layouts listed in game.layouts
+      const layoutIds = game.layouts || [];
+      const layoutFetches = layoutIds.map(id =>
+        fetch(`/data/layouts/${id}.json?t=${Date.now()}`)
+          .then(async r => {
+            if (!r.ok) return null;
+            const text = await r.text();
+            if (text.trim().startsWith('<')) return null;
+            try { return JSON.parse(text); } catch (e) { return null; }
+          })
+          .then(data => ({ id, data }))
+      );
+
+      const layoutResults = await Promise.all(layoutFetches);
+
       // Populate Data store
       Data.game = game;
       Data.characters = characters;
@@ -88,6 +103,10 @@ export class BootScene extends Phaser.Scene {
       Data.animations = {};
       animResults.forEach(({ id, data }) => {
         if (data) Data.animations[id] = data;
+      });
+      Data.layouts = {};
+      layoutResults.forEach(({ id, data }) => {
+        if (data) Data.layouts[id] = data;
       });
 
       // Preload image assets referenced by scenes and characters

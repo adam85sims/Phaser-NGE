@@ -145,6 +145,7 @@ describe('SceneController', () => {
         background: null,
         layers: undefined,
         music: null,
+        layout: null,
       });
       expect(ctrl.currentNode.id).toBe('start');
     });
@@ -196,6 +197,7 @@ describe('SceneController', () => {
         background: 'city_night',
         layers: [{ type: 'background', asset: 'city_night' }],
         music: 'ambient',
+        layout: null,
       });
     });
 
