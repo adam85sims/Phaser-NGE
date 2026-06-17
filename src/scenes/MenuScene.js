@@ -59,6 +59,12 @@ export class MenuScene extends Phaser.Scene {
       startBtn.on('pointerover', () => startBtn.setColor('#ffffff'));
       startBtn.on('pointerout', () => startBtn.setColor('#00ccff'));
       startBtn.on('pointerup', () => this._sceneTransition('GameScene'));
+      
+      const galleryBtn = this.add.text(W / 2, 480, '▶  Gallery', { fontSize: '18px', fontFamily: 'monospace', color: '#888888' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      galleryBtn.on('pointerover', () => galleryBtn.setColor('#ffffff'));
+      galleryBtn.on('pointerout', () => galleryBtn.setColor('#888888'));
+      galleryBtn.on('pointerup', () => this._sceneTransition('GalleryScene'));
+
       this.tweens.add({ targets: startBtn, alpha: 0.6, duration: 1500, yoyo: true, repeat: -1 });
       return;
     }
@@ -99,6 +105,8 @@ export class MenuScene extends Phaser.Scene {
         text.on('pointerup', () => this._loadAutoSave());
       } else if (btn.id === 'settings') {
         text.on('pointerup', () => this._showSettings(W, H));
+      } else if (btn.id === 'gallery') {
+        text.on('pointerup', () => this._sceneTransition('GalleryScene'));
       }
     });
 
@@ -131,12 +139,13 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '36px', fontFamily: 'monospace', color: '#ffffff',
     }).setOrigin(0.5);
 
-    const rowY = [240, 310, 380, 450];
-    const labels = ['Text Speed', 'BGM Volume', 'SFX Volume', 'Fullscreen'];
+    const rowY = [240, 300, 360, 420, 480];
+    const labels = ['Text Speed', 'BGM Volume', 'SFX Volume', 'Voice Volume', 'Fullscreen'];
     const getters = [
       () => `${Settings.textSpeed}ms`,
       () => `${Math.round(Settings.bgmVolume * 100)}%`,
       () => `${Math.round(Settings.sfxVolume * 100)}%`,
+      () => `${Math.round(Settings.voiceVolume * 100)}%`,
       () => Settings.fullscreen ? 'On' : 'Off',
     ];
     const actions = [
@@ -146,6 +155,8 @@ export class MenuScene extends Phaser.Scene {
         dec: () => { Settings.bgmVolume = Settings.clamp(Settings.bgmVolume - 0.1, 0, 1); Settings.save(); } },
       { inc: () => { Settings.sfxVolume = Settings.clamp(Settings.sfxVolume + 0.1, 0, 1); Settings.save(); },
         dec: () => { Settings.sfxVolume = Settings.clamp(Settings.sfxVolume - 0.1, 0, 1); Settings.save(); } },
+      { inc: () => { Settings.voiceVolume = Settings.clamp(Settings.voiceVolume + 0.1, 0, 1); Settings.save(); },
+        dec: () => { Settings.voiceVolume = Settings.clamp(Settings.voiceVolume - 0.1, 0, 1); Settings.save(); } },
       { inc: () => { Settings.fullscreen = true; Settings.save(); this.scale.startFullscreen(); },
         dec: () => { Settings.fullscreen = false; Settings.save(); this.scale.stopFullscreen(); } },
     ];

@@ -51,3 +51,8 @@
 - *Decision:* Removed `bg_` prefix on textures in `MenuScene` and `SplashScene`, matching `BootScene` caching strategy (raw paths). Cleaned up `theme.json` to have relative paths.
 - *Gotcha:* `variables.json` contained type mismatches where variables of type 'number' or 'boolean' had default string values, causing bugs in logic evaluation. Fixed by matching default values to their declared types.
 - *Gotcha:* The drag-and-drop `dataTransfer` payload from the Asset Browser contains a JSON string with `{path, type}` properties. Legacy Menu and Splash editor drop handlers only checked for plain text strings. Fix: Unified all drop handlers (Scene Composer, Menu, Splash) to correctly parse `application/json` and `text/plain` payloads to extract the relative file `path`.
+
+- *Decision:* Voice Acting implemented via a dedicated audio channel. Implemented a 200ms quick fade out in \AudioSystem.js\ to avoid clicking sounds when the player rapidly skips through voiced dialogue lines.
+- *Decision:* Implemented \GlobalSaveSystem\ capabilities in \SaveSystem.js\ to track persistent data like unlocked CGs (and eventually achievements) via the \
+arrative_globals\ localStorage key.
+- *Gotcha:* The CG Gallery UI needs to know the total number of gallery images to display locked \?\ placeholders, but we have no backend at runtime. *Fix:* Intercepted the \/api/save\ request in the editor backend to automatically scan \public/assets/gallery/\ and compile a master list into \game.gallery\ upon save.

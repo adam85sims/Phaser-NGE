@@ -73,6 +73,12 @@ export class GameScene extends Phaser.Scene {
         this.characters.show(data.speaker, data.expression || 'neutral', data.position || 'center', data.zIndex || 0);
       }
 
+      if (data.voice) {
+        this.audio.playVoice(data.voice);
+      } else {
+        this.audio.stopVoice(200);
+      }
+
       this.dialogue.showDialogue(
         data.speaker, data.text, data.expression, null
       );
@@ -185,6 +191,15 @@ export class GameScene extends Phaser.Scene {
           // Legacy support: re-load the single layer
           this.layers.loadSceneLayers([], data.value);
           break;
+        case 'unlock_cg': {
+          const globals = this.saveSys.getGlobals();
+          if (!globals.unlockedCGs) globals.unlockedCGs = [];
+          if (!globals.unlockedCGs.includes(data.value)) {
+            globals.unlockedCGs.push(data.value);
+            this.saveSys.saveGlobals(globals);
+          }
+          break;
+        }
         case 'camera_shake':
           const [dur, int] = (data.value || '200,0.005').split(',').map(Number);
           this.cameras.main.shake(dur || 200, int || 0.005);
@@ -347,6 +362,7 @@ export class GameScene extends Phaser.Scene {
     if (node.type === 'dialogue') {
       const consumed = this.dialogue.advance();
       if (!consumed) {
+        this.audio.stopVoice(200);
         this.sceneCtrl.advance();
       }
     } else if (node.type === 'event' || node.type === 'wait') {
@@ -372,6 +388,7 @@ export class GameScene extends Phaser.Scene {
   _cleanupUI() {
     this.dialogue.setVisible(false);
     this.characters.hideAll();
+    this.audio.stopVoice(200);
     if (this._pendingEndText) this._pendingEndText.destroy();
     this._pendingEndText = null;
   }

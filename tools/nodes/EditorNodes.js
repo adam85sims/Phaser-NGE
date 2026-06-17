@@ -36,6 +36,7 @@ Registry.extendNodeType('dialogue', {
         </div>
       </div>
       <div class="form-group"><label>Z-Index</label><input type="number" value="${node.zIndex??0}" data-field="zIndex" data-type="number"/></div>
+      <div class="form-group"><label>Voice (Audio Key)</label><select data-field="voice" id="voice-select"><option value="">— none —</option></select></div>
       <div class="form-group"><label>Text</label><textarea data-field="text">${(node.text||'').replace(/</g,'&lt;')}</textarea></div>
       <div class="form-row"><div class="form-group"><label>Auto</label><select data-field="autoAdvance">
         <option value="false">No</option><option value="true"${node.autoAdvance?' selected':''}>Yes</option></select></div>
@@ -48,6 +49,7 @@ Registry.extendNodeType('dialogue', {
     const bgThumb = container.querySelector('#background-thumb');
     const exprSelect = container.querySelector('#expression-select');
     const speakerSelect = container.querySelector('#speaker-select');
+    const voiceSelect = container.querySelector('#voice-select');
 
     // Fetch assets and populate background dropdown
     if (bgSelect && ctx.backend) {
@@ -86,6 +88,22 @@ Registry.extendNodeType('dialogue', {
           });
           bgSelect.replaceWith(fallback);
         }
+      });
+    }
+
+    if (voiceSelect && ctx.backend) {
+      ctx.backend.listAssets().then(assets => {
+        const voiceAssets = (Array.isArray(assets) ? assets : [])
+          .filter(f => f.path && f.path.startsWith('audio/voice/'))
+          .map(f => f.name.replace(/\.[^.]+$/, ''));
+        voiceSelect.innerHTML = '<option value="">— none —</option>' +
+          voiceAssets.map(k => `<option value="${k}"${k === node.voice ? ' selected' : ''}>${k}</option>`).join('');
+
+        voiceSelect.addEventListener('change', () => {
+          helpers.captureUndoState();
+          node.voice = voiceSelect.value;
+          helpers.markDirty();
+        });
       });
     }
 
@@ -286,6 +304,7 @@ Registry.extendNodeType('event', {
         <option value="bgm_stop"${isStop?' selected':''}>⏹ Stop BGM</option>
         <option value="sfx"${isSFX?' selected':''}>🔊 Play SFX</option>
         <option value="bg_change"${isBG?' selected':''}>🖼️ Change Background</option>
+        <option value="unlock_cg"${evType==='unlock_cg'?' selected':''}>🔓 Unlock CG</option>
         <option value="camera_shake"${evType==='camera_shake'?' selected':''}>📳 Camera Shake</option>
         <option value="camera_flash"${evType==='camera_flash'?' selected':''}>✨ Camera Flash</option>
         <option value="play_animation"${isAnim?' selected':''}>🎬 Play Animation</option>
@@ -299,9 +318,9 @@ Registry.extendNodeType('event', {
             </select>
           </div>
           ${volRow}` : ''}
-        ${isBG ? `
+        ${(isBG || evType === 'unlock_cg') ? `
           <div class="form-group">
-            <label>Background</label>
+            <label>${isBG ? 'Background' : 'Gallery Image'}</label>
             <select data-field="eventValue" id="ev-asset-select">
               <option value="${node.eventValue||''}">${node.eventValue || '— loading… —'}</option>
             </select>
@@ -357,6 +376,7 @@ Registry.extendNodeType('event', {
         if (evType === 'bgm')      items = assetList.filter(f => f.path && f.path.startsWith('audio/bgm/')).map(f => f.name.replace(/\.[^.]+$/, ''));
         else if (evType === 'sfx') items = assetList.filter(f => f.path && f.path.startsWith('audio/sfx/')).map(f => f.name.replace(/\.[^.]+$/, ''));
         else if (evType === 'bg_change') items = assetList.filter(f => f.path && f.path.startsWith('backgrounds/')).map(f => f.name.replace(/\.[^.]+$/, ''));
+        else if (evType === 'unlock_cg') items = assetList.filter(f => f.path && f.path.startsWith('gallery/')).map(f => f.name.replace(/\.[^.]+$/, ''));
 
         const current = node.eventValue || '';
         assetSelect.innerHTML = `<option value="">— select —</option>` +

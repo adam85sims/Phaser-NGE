@@ -7,6 +7,7 @@ export const Settings = {
   textSpeed: 40,
   bgmVolume: 0.7,
   sfxVolume: 1.0,
+  voiceVolume: 1.0,
   fullscreen: false,
 
   /** Load settings from localStorage */
@@ -30,6 +31,7 @@ export const Settings = {
         textSpeed: this.textSpeed,
         bgmVolume: this.bgmVolume,
         sfxVolume: this.sfxVolume,
+        voiceVolume: this.voiceVolume,
         fullscreen: this.fullscreen,
       }));
     } catch {
@@ -41,6 +43,7 @@ export const Settings = {
     this.textSpeed = 40;
     this.bgmVolume = 0.7;
     this.sfxVolume = 1.0;
+    this.voiceVolume = 1.0;
     this.fullscreen = false;
   },
 

@@ -414,14 +414,14 @@ Asset keys can be:
 ### DialogueSystem
 - Built once per `GameScene.create()` from theme config. Container at `depth=100` (above characters at `depth=50` and layers at `depth=0`).
 - Typewriter: each char added after `textSpeed` ms. Inline tags parsed by regex `\[(show|hide|anim):([^\]]+)\]` and fired when the typewriter hits their `index` offset.
-- `[anim:target:key]` resolves target via `layers.layers.get(targetId).image` first, then `characters.activeSprites.get(targetId)`. Note: `LayerSystem.layers` is a plain object (not a Map) — there's a known bug here; if anim tags fail, check whether your code uses `.get()` on it.
+- `[anim:target:key]` resolves target via `layers.layers.get(targetId).image` first, then `characters.activeSprites.get(targetId)`. Note: `LayerSystem.layers` is a plain object (not a Map) — there's a known bug here; if anim tags fail, check whether your code uses `.get()` on it. **Update: this was fixed — uses bracket access `layers?.[tag.target]` and `portraits?.[tag.target]` now.**
 - Skip-to-end (`advance()` while typing) immediately fires all pending tags, sets full text, shows the continue arrow.
 - History: `history = []`, pushed on `showDialogue()`. `H` toggles `showHistory()` (implementation in `DialogueSystem`).
 - Skip/auto modes: `setSkipMode(bool)`, `setAutoMode(bool)`, `toggleSkip()`, `toggleAuto()`. Auto-advance fires the dialogue callback after 2s.
 
 ## Testing
 
-- `npm test` — Vitest with jsdom. **Only pure-logic systems are covered:** DataLoader, VariableSystem, SceneController, SaveSystem, SettingsSystem.
+- `npm test` — Vitest with jsdom. **Only pure-logic systems are covered:** DataLoader, VariableSystem, SceneController, SaveSystem, SettingsSystem, TransitionSystem.
 - Phaser-dependent systems (DialogueSystem, CharacterSystem, LayerSystem, AudioSystem, AnimationRunner) are tested via the manual `docs/qa-checklist.md`.
 - `tests/setup.js` polyfills `localStorage` (jsdom already provides it) and silences `console.warn`/`console.error` per-test, exposing `getWarnings()` / `getErrors()` helpers.
 - Test reporter is `verbose` locally, `default` in CI (`process.env.CI`).
@@ -439,7 +439,7 @@ Asset keys can be:
 - The legacy `nge_editor_data` localStorage path has been removed — the editor only reads from disk via `/api/save` and `/data/*.json`.
 - `Migrate-v2-assets.cjs` is a one-off script for reorganizing the assets folder layout, not part of the dev workflow. Don't `require` it from new code.
 - `data/theme.json` is **optional** — `BootScene` swallows fetch errors for it. If theme is missing, the engine falls back to hardcoded layouts.
-- `GameScene._getStartScene()` defaults to `'sample'` as a fallback (line 337). This is a vestige from before the editor shipped — adjust if you're building a new project that doesn't have a `sample` scene.
+- `GameScene._getStartScene()` defaults to `'start'` as a fallback (line 399). If your game doesn't have a `start` scene, change this or set `game.startScene` in `data/game.json`.
 
 ## `.brain/` — Antigravity AI Memory
 

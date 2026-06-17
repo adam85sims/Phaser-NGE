@@ -9,8 +9,10 @@ export class AudioSystem {
   constructor(scene) {
     this.scene = scene;
     this.bgmChannel = null;
+    this.voiceChannel = null;
     this.bgmVolume = Settings.bgmVolume;
     this.sfxVolume = Settings.sfxVolume;
+    this.voiceVolume = Settings.voiceVolume || 1.0;
     this.muted = false;
 
     // Track active tween so we can cancel mid-crossfade
@@ -144,17 +146,60 @@ export class AudioSystem {
     this.sfxVolume = v;
   }
 
+  setVoiceVolume(v) {
+    this.voiceVolume = v;
+    if (this.voiceChannel) this.voiceChannel.setVolume(v);
+  }
+
   toggleMute() {
     this.muted = !this.muted;
     if (this.muted) {
       if (this.bgmChannel) this.bgmChannel.pause();
+      if (this.voiceChannel) this.voiceChannel.pause();
     } else {
       if (this.bgmChannel) this.bgmChannel.resume();
+      if (this.voiceChannel) this.voiceChannel.resume();
     }
     return this.muted;
   }
 
   destroy() {
     this.stopBGM(0);
+    this.stopVoice(0);
+  }
+
+  /** Play a voice line, stopping previous ones */
+  playVoice(key) {
+    if (!key || this.muted) return;
+    this.stopVoice(0);
+    if (this.scene.cache.audio.exists(key)) {
+      this.voiceChannel = this.scene.sound.add(key, { volume: this.voiceVolume });
+      this.voiceChannel.play();
+    } else {
+      this._warnMissing('voice', key);
+    }
+  }
+
+  /** Stop voice playback with optional quick fade */
+  stopVoice(fadeDuration = 200) {
+    if (!this.voiceChannel) return;
+    
+    if (fadeDuration > 0 && this.voiceChannel.isPlaying) {
+      const channel = this.voiceChannel;
+      this.scene.tweens.add({
+        targets: channel,
+        volume: 0,
+        duration: fadeDuration,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          channel.stop();
+          channel.destroy();
+        }
+      });
+    } else {
+      this.voiceChannel.stop();
+      this.voiceChannel.destroy();
+    }
+    this.voiceChannel = null;
   }
 }

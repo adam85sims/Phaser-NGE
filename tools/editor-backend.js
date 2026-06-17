@@ -92,6 +92,18 @@ export default function editorBackend(options = {}) {
               await fs.mkdir(scenesDir, { recursive: true });
               await fs.mkdir(animationsDir, { recursive: true });
 
+              // Auto-compile gallery list
+              try {
+                const galleryDir = path.join(projectRoot, 'public', 'assets', 'gallery');
+                await fs.mkdir(galleryDir, { recursive: true });
+                const galleryItems = await fs.readdir(galleryDir);
+                if (payload.game) {
+                  payload.game.gallery = galleryItems
+                    .filter(i => /\.(png|jpg|jpeg|webp)$/i.test(i))
+                    .map(i => i.replace(/\.[^.]+$/, ''));
+                }
+              } catch (e) {}
+
               // Write main project files
               if (payload.game) await fs.writeFile(path.join(dataDir, 'game.json'), JSON.stringify(payload.game, null, 2));
               if (payload.characters) await fs.writeFile(path.join(dataDir, 'characters.json'), JSON.stringify(payload.characters, null, 2));
@@ -227,6 +239,18 @@ export default function editorBackend(options = {}) {
                 const existingAnims = await fs.readdir(animationsDir);
                 for (const file of existingAnims) {
                   if (file.endsWith('.json')) await fs.unlink(path.join(animationsDir, file));
+                }
+              } catch (e) {}
+
+              // Auto-compile gallery list
+              try {
+                const galleryDir = path.join(projectRoot, 'public', 'assets', 'gallery');
+                await fs.mkdir(galleryDir, { recursive: true });
+                const galleryItems = await fs.readdir(galleryDir);
+                if (payload.game) {
+                  payload.game.gallery = galleryItems
+                    .filter(i => /\.(png|jpg|jpeg|webp)$/i.test(i))
+                    .map(i => i.replace(/\.[^.]+$/, ''));
                 }
               } catch (e) {}
 

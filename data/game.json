@@ -20,5 +20,9 @@
   },
   "animations": [],
   "width": 1280,
-  "height": 720
+  "height": 720,
+  "gallery": [
+    "cg01",
+    "cg02"
+  ]
 }

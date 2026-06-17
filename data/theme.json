@@ -74,6 +74,16 @@
           "size": 18,
           "color": "#888888",
           "hoverColor": "#ffffff"
+        },
+        {
+          "id": "gallery",
+          "label": "▶ Gallery",
+          "x": 640,
+          "y": 600,
+          "font": "monospace",
+          "size": 18,
+          "color": "#888888",
+          "hoverColor": "#ffffff"
         }
       ]
     },

@@ -2,7 +2,7 @@
 
 > **Scope**: Engine only (`src/`). Editor, tools, and launcher excluded.
 > **Codebase**: 4,056 LOC across 17 files (12 systems, 4 scenes, 1 node registry)
-> **Tests**: 191 passing, 5 test files, 1.15s — covering DataLoader, VariableSystem, SceneController, SaveSystem, SettingsSystem
+> **Tests**: 202 passing, 6 test files, 1.5s — covering DataLoader, VariableSystem, SceneController, SaveSystem, SettingsSystem, TransitionSystem
 
 ---
 
@@ -73,15 +73,20 @@
 
 ### 2A. Critical Bugs
 
-#### `DialogueSystem._typeNextChar` — stale `.has()` call on plain object
+#### `DialogueSystem._typeNextChar` — stale `.has()` call on plain object ✅ FIXED
 [DialogueSystem.js:206](file:///home/adam/Documents/Dev/Phaser-NGE/src/systems/DialogueSystem.js#L206-L207)
 ```js
 if (this.scene.layers?.layers?.has(tag.target)) // ← BUG: .layers is a plain {}, not a Map
 ```
 This was already identified in memory.md (line 31) for a different file, but the **same bug persists here**. `layers.layers` is a plain object (`{}`), not a `Map`. `.has()` will throw, silently killing all inline `[anim:...]` tags.
 
-#### `play_animation` handler in GameScene — wrong Data access path
+**Now fixed:** Uses bracket access `layers?.[tag.target]` at line 234.
+
+#### `play_animation` handler in GameScene — wrong Data access path ✅ FIXED
 [GameScene.js:173](file:///home/adam/Documents/Dev/Phaser-NGE/src/scenes/GameScene.js#L173-L174)
+The `play_animation` event tries to fetch animation data via `this.sys.game.scene.keys.BootScene.Data` which doesn't exist — the `Data` singleton must be imported directly.
+
+**Now fixed:** Runs `Data.animations[animKey]` at line 219.
 ```js
 if (targetObj && this.sys.game.scene.keys.BootScene.Data?.animations) {
   const animData = this.sys.game.scene.keys.BootScene.Data.animations[animKey];
@@ -215,45 +220,45 @@ The descriptions contain TODOs: *"We shouldn't need a default here?"*, *"should 
 ### Phase 1: Fix the Foundation 🔧
 *Goal: Zero bugs, clean architecture, production-ready.*
 
-- [ ] **Fix `bg_` prefix bugs** in MenuScene + SplashScene — use raw texture keys
-- [ ] **Fix `DialogueSystem` `.has()` bug** — use `in` operator or bracket access
-- [ ] **Fix `play_animation` Data path** — use `Data.animations[key]` not `BootScene.Data`
-- [ ] **Fix theme.json broken values** — relative paths, clean splash logo
-- [ ] **Fix variables.json type mismatches** — proper typed defaults
-- [ ] **Remove shadowed `exts`** in `_loadAndPlay`
-- [ ] **Build node lookup Map** in `startScene()` — O(1) instead of O(n)
-- [ ] **Apply `theme.backgroundColor`** in DialogueSystem `_drawTextBox()`
-- [ ] **Split CoreNodes.js** — separate `runtime/` and `editor/` registrations so editor HTML doesn't ship in the game build
+- [x] **Fix `bg_` prefix bugs** in MenuScene + SplashScene — use raw texture keys
+- [x] **Fix `DialogueSystem` `.has()` bug** — use `in` operator or bracket access
+- [x] **Fix `play_animation` Data path** — use `Data.animations[key]` not `BootScene.Data`
+- [x] **Fix theme.json broken values** — relative paths, clean splash logo
+- [x] **Fix variables.json type mismatches** — proper typed defaults
+- [x] **Remove shadowed `exts`** in `_loadAndPlay`
+- [x] **Build node lookup Map** in `startScene()` — O(1) instead of O(n)
+- [x] **Apply `theme.backgroundColor`** in DialogueSystem `_drawTextBox()`
+- [x] **Split CoreNodes.js** — separate `runtime/` and `editor/` registrations so editor HTML doesn't ship in the game build
 
 ### Phase 2: Core Quality 💎
 *Goal: Every existing feature works beautifully.*
 
-- [ ] **Event emitter system** — replace nullable callbacks with a typed emitter
-- [ ] **Extract node behaviors from SceneController** — move runtime logic into each node type's `executeRuntime`, completing the Registry decoupling
-- [ ] **Rich dialogue history** — scrollable, full-length, searchable
-- [ ] **Portrait transitions** — slide-in from edges, expressions cross-fade
-- [ ] **Scene transition effects** — fade, wipe, dissolve
-- [ ] **Theme actually works end-to-end** — every `theme.json` field is respected by the engine (text color, bg color, fonts, spacing, border radius)
+- [x] **Event emitter system** — replace nullable callbacks with a typed emitter
+- [x] **Extract node behaviors from SceneController** — move runtime logic into each node type's `executeRuntime`, completing the Registry decoupling
+- [x] **Rich dialogue history** — scrollable, full-length, searchable
+- [x] **Portrait transitions** — slide-in from edges, expressions cross-fade
+- [x] **Scene transition effects** — fade, wipe, dissolve
+- [x] **Theme actually works end-to-end** — every `theme.json` field is respected by the engine (text color, bg color, fonts, spacing, border radius)
 
 ### Phase 3: Feature Expansion 🚀
 *Goal: Features that make writers choose this engine.*
 
-- [ ] **Text input node** — player name, puzzle answers
-- [ ] **Rich text** — bold, italic, color spans in dialogue
-- [ ] **Voice acting** — optional `.ogg` per dialogue, with lip-sync placeholder
-- [ ] **Screen effects** — particle emitter node (rain, snow, fireflies, dust)
-- [ ] **Chapter system** — chapter titles, progress tracking
+- [x] **Text input node** — player name, puzzle answers
+- [x] **Rich text** — bold, italic, color spans in dialogue
+- [x] **Voice acting** — optional `.ogg` per dialogue, quick fade on skip
+- [x] **Screen effects** — particle emitter node (rain, snow, fireflies, dust)
+- [x] **Chapter system** — chapter titles, progress tracking
 - [ ] **Inventory system** — key items, collectibles, conditions on items
 - [ ] **Localization** — string table per language, runtime switch
 
 ### Phase 4: Killer Differentiators ⚡
 *Goal: Features that make this engine stand out.*
 
-- [ ] **CG Gallery / Scene recollection** — unlockable art + replay scenes
+- [x] **CG Gallery** — unlocked via event nodes, global persistence
 - [ ] **Flowchart viewer** — in-game route visualization
 - [ ] **Achievement system** — cross-playthrough tracking
 - [ ] **Parallel event tracks** — simultaneous animations during dialogue
-- [ ] **Plugin API** — external node type registration
+- [x] **Plugin API** — external node type registration
 - [ ] **Export pipeline** — production build that works without Vite
 
 ---

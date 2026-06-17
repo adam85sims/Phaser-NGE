@@ -8,15 +8,13 @@ However, there are a few critical architectural bugs remaining from previous ite
 
 ## Code Review & Architectural Findings
 
-### 🔴 Critical Issues
+### 🔴 Critical Issues (All Fixed)
 
-1. **Save/Load System Reverts Progress to Scene Start**
-   * **Issue:** `SaveSystem.js` still references and relies on `nodeIndex` (which was removed in favor of explicit graph jumps via `nodeId`). Consequently, when loading a game (`GameScene.js -> quickLoad`), the `GameScene` invokes `this.sceneCtrl.startScene(loaded.sceneId);`, which restarts the scene from the `entryNode`. 
-   * **Fix:** Update `SaveSystem.js` to correctly persist and restore the explicit `nodeId`. Then, update `GameScene.js` to instruct the `SceneController` to jump directly to that `nodeId` post-load.
+1. ~~**Save/Load System Reverts Progress to Scene Start**~~ ✅ **FIXED**
+   * `SaveSystem.js` now persists `nodeId` (not `nodeIndex`), and `load()` returns `{ sceneId, nodeId }` for direct graph jumps. Verified — 0 references to `nodeIndex` remain in `src/`.
 
-2. **Native Timeout Desyncs (`SceneController.js`)**
-   * **Issue:** `SceneController.js` relies heavily on native JavaScript `setTimeout` and `clearTimeout` for `autoAdvance` and `doWait`. Because native JS timers continue running (or run at severely throttled rates) when the browser tab is backgrounded, they will fall out of sync with Phaser's internal game loop, potentially causing overlapping logic, duplicated node advances, or visual glitches.
-   * **Fix:** Pass a time provider (e.g., `scene.time.delayedCall`) into `SceneController`, or handle `wait` nodes directly in `GameScene.js` by tapping into Phaser's scene clock.
+2. ~~**Native Timeout Desyncs (`SceneController.js`)**~~ ✅ **FIXED**
+   * No `setTimeout`/`clearTimeout` calls remain in `SceneController.js` — timing is handled through Phaser's tween system and scene lifecycle. Verified — 0 `setTimeout` references in `src/`.
 
 ### 🟡 Technical Debt & Refactoring
 
@@ -58,4 +56,20 @@ Based on the code review and the `deferred-todo.md` features, here is a structur
 * **Task 4 (Editor UX):** Add a "Scene Preview" feature inside the Dialogue editor that lets the developer instantly boot the game inside an iframe dynamically loaded with the current draft graph data.
 
 ---
-*Let me know if you agree with this assessment, or if you'd prefer to adjust priorities. We can immediately knock out the critical Save System and Timeouts bugs if you are ready!*
+| *Let me know if you agree with this assessment, or if you'd prefer to adjust priorities. We can immediately knock out the critical Save System and Timeouts bugs if you are ready!*
+
+---
+
+## ✅ Completed Since This Plan Was Written
+
+| Feature | Sprint | Status |
+|---------|--------|--------|
+| Save/Load uses `nodeId` (not `nodeIndex`) | Sprint 1 | ✅ |
+| SceneController uses Phaser tweens (not `setTimeout`) | Sprint 1 | ✅ |
+| Voice Acting (quick fade, settings, audio channel) | Sprint 2 | ✅ |
+| CG Gallery (auto-compilation, global persistence, grid) | Sprint 2 | ✅ |
+| Event volume control (`eventVolume` on event nodes) | Sprint 2 | ✅ |
+| `eventType`-aware inspector (asset dropdown, context fields) | Sprint 1 | ✅ |
+| Runtime audio fallback (`_loadAndPlay` probe) | Sprint 1 | ✅ |
+| Variable delta (`addFlag`/`delta` on choices) | Sprint 2 | ✅ |
+| `call_scene`/`macro` nodes with scoped args | Sprint 1 | ✅ |

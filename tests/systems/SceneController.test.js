@@ -369,6 +369,7 @@ describe('SceneController', () => {
         autoAdvance: false,
         waitTime: 0,
         comment: null,
+        voice: null,
       });
     });
 

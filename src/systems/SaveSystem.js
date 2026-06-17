@@ -7,6 +7,7 @@ export class SaveSystem {
     this.vars = variableSystem;
     this.sceneCtrl = sceneController;
     this.SAVE_KEY = 'narrative_saves';
+    this.GLOBALS_KEY = 'narrative_globals';
   }
 
   /** Get list of save slots */
@@ -82,5 +83,23 @@ export class SaveSystem {
   formatTimestamp(ts) {
     const d = new Date(ts);
     return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  /** Get global data (unlocked CGs, achievements, etc) */
+  getGlobals() {
+    const raw = localStorage.getItem(this.GLOBALS_KEY);
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+
+  /** Save global data */
+  saveGlobals(data) {
+    try {
+      localStorage.setItem(this.GLOBALS_KEY, JSON.stringify(data));
+    } catch {}
   }
 }

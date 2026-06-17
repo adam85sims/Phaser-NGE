@@ -8,6 +8,7 @@ Registry.registerNodeType('dialogue', {
     ctrl.events.emit('dialogue', {
       speaker: node.speaker || null,
       text: node.text || '',
+      voice: node.voice || null,
       expression: node.expression || null,
       position: node.position || 'center',
       zIndex: node.zIndex || 0,

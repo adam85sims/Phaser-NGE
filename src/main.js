@@ -4,6 +4,7 @@ import { BootScene } from './scenes/BootScene.js';
 import { SplashScene } from './scenes/SplashScene.js';
 import { MenuScene } from './scenes/MenuScene.js';
 import { GameScene } from './scenes/GameScene.js';
+import { GalleryScene } from './scenes/GalleryScene.js';
 
 async function initGame() {
   try {
@@ -24,7 +25,13 @@ async function initGame() {
       dom: {
         createContainer: true
       },
-      scene: [BootScene, SplashScene, MenuScene, GameScene]
+      scene: [
+    BootScene,
+    SplashScene,
+    MenuScene,
+    GameScene,
+    GalleryScene
+  ]
     };
 
     new Phaser.Game(config);
