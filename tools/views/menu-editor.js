@@ -42,7 +42,7 @@ export function render(container, context) {
     <!-- The Editor Canvas -->
     <div id="menu-canvas-wrapper" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-dark);overflow:auto;">
       <div id="menu-canvas" style="position:relative;width:${vw}px;height:${vh}px;background:#0a0a1a;transform-origin:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);overflow:hidden;">
-        ${menuConfig.background ? `<img src="/assets/backgrounds/${menuConfig.background}.png" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0.6;" onerror="this.style.display='none'"/>` : ''}
+        ${menuConfig.background ? `<img src="/assets/${menuConfig.background}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0.6;" onerror="this.style.display='none'"/>` : ''}
         
         <!-- Elements -->
         <div class="menu-el" data-id="title" style="position:absolute;left:${menuConfig.title.x}px;top:${menuConfig.title.y}px;transform:translate(-50%, -50%);font-family:${menuConfig.title.font};font-size:${menuConfig.title.size}px;color:${menuConfig.title.color};white-space:nowrap;cursor:move;user-select:none;text-align:center;">
@@ -64,6 +64,7 @@ export function render(container, context) {
 
   _bindCanvasEvents();
   _bindToolbarEvents();
+  _bindCanvasDropEvents();
   
   // Default to selecting Title
   window._menuSelectedId = window._menuSelectedId || 'title';
@@ -265,17 +266,43 @@ function _renderMenuInspector() {
 }
 
 // Global hook for asset browser dragging
-window.addEventListener('dragover', (e) => {
-  if (document.body.dataset.mode === 'menu') {
+function _bindCanvasDropEvents() {
+  const canvas = document.getElementById('menu-canvas');
+  if (!canvas) return;
+
+  canvas.addEventListener('dragover', (e) => {
     e.preventDefault();
-  }
-});
-window.addEventListener('drop', (e) => {
-  if (document.body.dataset.mode === 'menu') {
+    canvas.style.outline = '4px dashed var(--accent)';
+    canvas.style.outlineOffset = '-4px';
+  });
+
+  canvas.addEventListener('dragleave', (e) => {
     e.preventDefault();
-    const assetKey = e.dataTransfer.getData('text/plain');
-    if (assetKey && window.__handleMenuAssetDrop) {
-      window.__handleMenuAssetDrop(assetKey);
+    canvas.style.outline = 'none';
+  });
+
+  canvas.addEventListener('drop', (e) => {
+    e.preventDefault();
+    canvas.style.outline = 'none';
+    
+    let dragDataStr = e.dataTransfer.getData('application/json');
+    if (!dragDataStr) dragDataStr = e.dataTransfer.getData('text/plain');
+    if (!dragDataStr) return;
+    
+    try {
+      const dragData = JSON.parse(dragDataStr);
+      if (dragData.type === 'image' && dragData.path) {
+        if (window.__handleMenuAssetDrop) {
+            window.__handleMenuAssetDrop(dragData.path);
+        } else {
+            const config = getMenuConfig();
+            config.background = dragData.path;
+            window.__markProjectDirty?.();
+            render(_container, _context);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to parse dropped asset data:', err);
     }
-  }
-});
+  });
+}

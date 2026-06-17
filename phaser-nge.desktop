@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Phaser NGE
+Comment=Phaser Narrative Game Engine
+Exec="/opt/Phaser NGE/phaser-nge" %U
+Icon="/opt/Phaser NGE/icon.png"
+Type=Application
+Terminal=false
+Categories=Development;Game;

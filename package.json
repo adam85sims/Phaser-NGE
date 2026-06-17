@@ -29,12 +29,22 @@
       "src-main/**/*",
       "package.json"
     ],
+    "extraFiles": [
+      "icon.png",
+      "phaser-nge.desktop"
+    ],
     "linux": {
       "target": [
         "deb",
-        "rpm"
+        "rpm",
+        "dir"
       ],
-      "icon": "Phaser-NGE.png"
+      "icon": "icon.png",
+      "desktop": {
+        "entry": {
+          "Icon": "/opt/Phaser NGE/icon.png"
+        }
+      }
     },
     "win": {
       "target": [
@@ -46,7 +56,8 @@
     "@monaco-editor/loader": "^1.7.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "phaser": "^4.1.0"
+    "phaser": "^4.1.0",
+    "phaser3-rex-plugins": "^1.80.20"
   },
   "devDependencies": {
     "concurrently": "^10.0.3",

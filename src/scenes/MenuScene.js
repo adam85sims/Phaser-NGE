@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Data } from '../systems/DataLoader.js';
 import { Settings } from '../systems/SettingsSystem.js';
+import { TransitionSystem } from '../systems/TransitionSystem.js';
 
 /**
  * MenuScene — title screen with Start, Settings, and Continue buttons.
@@ -14,10 +15,17 @@ export class MenuScene extends Phaser.Scene {
     const W = 1280, H = 720;
     const title = Data.game?.title || 'Untitled';
 
-    // Background gradient
+    // Background gradient or color
+    const config = Data.theme?.ui?.menu;
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x1a0a3a, 0x1a0a3a, 1);
-    bg.fillRect(0, 0, W, H);
+    if (config?.backgroundColor && config.backgroundColor.startsWith('#')) {
+      const color = Phaser.Display.Color.HexStringToColor(config.backgroundColor).color;
+      bg.fillStyle(color, 1);
+      bg.fillRect(0, 0, W, H);
+    } else {
+      bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x1a0a3a, 0x1a0a3a, 1);
+      bg.fillRect(0, 0, W, H);
+    }
 
     this._showMenu(W, H, title);
   }
@@ -28,12 +36,18 @@ export class MenuScene extends Phaser.Scene {
     const config = Data.theme?.ui?.menu;
 
     // Background
-    if (config?.background && this.textures.exists(`bg_${config.background}`)) {
-      this.add.image(W/2, H/2, `bg_${config.background}`).setDisplaySize(W, H).setOrigin(0.5);
+    if (config?.background && this.textures.exists(config.background)) {
+      this.add.image(W/2, H/2, config.background).setDisplaySize(W, H).setOrigin(0.5);
     } else {
       const bg = this.add.graphics();
-      bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x1a0a3a, 0x1a0a3a, 1);
-      bg.fillRect(0, 0, W, H);
+      if (config?.backgroundColor && config.backgroundColor.startsWith('#')) {
+        const color = Phaser.Display.Color.HexStringToColor(config.backgroundColor).color;
+        bg.fillStyle(color, 1);
+        bg.fillRect(0, 0, W, H);
+      } else {
+        bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x1a0a3a, 0x1a0a3a, 1);
+        bg.fillRect(0, 0, W, H);
+      }
     }
     
     if (!config) {
@@ -44,7 +58,7 @@ export class MenuScene extends Phaser.Scene {
       const startBtn = this.add.text(W / 2, 420, '▶  Start Game', { fontSize: '22px', fontFamily: 'monospace', color: '#00ccff' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
       startBtn.on('pointerover', () => startBtn.setColor('#ffffff'));
       startBtn.on('pointerout', () => startBtn.setColor('#00ccff'));
-      startBtn.on('pointerdown', () => this._sceneTransition('GameScene'));
+      startBtn.on('pointerup', () => this._sceneTransition('GameScene'));
       this.tweens.add({ targets: startBtn, alpha: 0.6, duration: 1500, yoyo: true, repeat: -1 });
       return;
     }
@@ -80,11 +94,11 @@ export class MenuScene extends Phaser.Scene {
 
       if (btn.id === 'start') {
         startBtnObj = text;
-        text.on('pointerdown', () => this._sceneTransition('GameScene'));
+        text.on('pointerup', () => this._sceneTransition('GameScene'));
       } else if (btn.id === 'continue') {
-        text.on('pointerdown', () => this._loadAutoSave());
+        text.on('pointerup', () => this._loadAutoSave());
       } else if (btn.id === 'settings') {
-        text.on('pointerdown', () => this._showSettings(W, H));
+        text.on('pointerup', () => this._showSettings(W, H));
       }
     });
 
@@ -101,9 +115,16 @@ export class MenuScene extends Phaser.Scene {
     this.children.removeAll(true);
 
     // Background
+    const config = Data.theme?.ui?.menu;
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x1a0a3a, 0x1a0a3a, 1);
-    bg.fillRect(0, 0, W, H);
+    if (config?.backgroundColor && config.backgroundColor.startsWith('#')) {
+      const color = Phaser.Display.Color.HexStringToColor(config.backgroundColor).color;
+      bg.fillStyle(color, 1);
+      bg.fillRect(0, 0, W, H);
+    } else {
+      bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x1a0a3a, 0x1a0a3a, 1);
+      bg.fillRect(0, 0, W, H);
+    }
 
     // Title
     this.add.text(W / 2, 120, 'Settings', {
@@ -155,11 +176,11 @@ export class MenuScene extends Phaser.Scene {
         backgroundColor: '#113311', padding: { x: 6, y: 2 },
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-      minus.on('pointerdown', () => {
+      minus.on('pointerup', () => {
         actions[i].dec();
         val.setText(getters[i]());
       });
-      plus.on('pointerdown', () => {
+      plus.on('pointerup', () => {
         actions[i].inc();
         val.setText(getters[i]());
       });
@@ -171,15 +192,14 @@ export class MenuScene extends Phaser.Scene {
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
     backBtn.on('pointerout', () => backBtn.setColor('#aaaaaa'));
-    backBtn.on('pointerdown', () => this._showMenu(W, H));
+    backBtn.on('pointerup', () => this._showMenu(W, H));
 
     this.input.keyboard.removeAllListeners();
     this.input.keyboard.on('keydown-ESC', () => this._showMenu(W, H));
   }
 
   _sceneTransition(targetScene) {
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once('camerafadeoutcomplete', () => {
+    TransitionSystem.runTransition(this, 'fade', 600, () => {
       this.scene.start(targetScene);
     });
   }
@@ -189,7 +209,9 @@ export class MenuScene extends Phaser.Scene {
       const slots = JSON.parse(localStorage.getItem('narrative_saves') || '[]');
       const autoSave = slots[9];
       if (autoSave && autoSave.sceneId) {
-        this.scene.start('GameScene', { loadScene: autoSave.sceneId, variables: autoSave.variables });
+        TransitionSystem.runTransition(this, 'fade', 600, () => {
+          this.scene.start('GameScene', { loadScene: autoSave.sceneId, variables: autoSave.variables });
+        });
       } else {
         this._sceneTransition('GameScene');
       }

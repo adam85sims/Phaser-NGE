@@ -27,6 +27,15 @@ export class Registry {
     return this.nodeTypes.get(typeId);
   }
 
+  static extendNodeType(typeId, config) {
+    const existing = this.nodeTypes.get(typeId);
+    if (existing) {
+      Object.assign(existing, config);
+    } else {
+      console.warn(`Cannot extend unknown node type: ${typeId}`);
+    }
+  }
+
   static getAllNodeTypes() {
     return Array.from(this.nodeTypes.entries()).map(([id, config]) => ({
       id,

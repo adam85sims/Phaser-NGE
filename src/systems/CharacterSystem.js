@@ -23,31 +23,67 @@ export class CharacterSystem {
     const charData = Data.getCharacter(characterId);
     if (!charData || charData.invisible) return;
 
-    // Hide existing portrait for this character if present
-    if (this.portraits[characterId]) {
-      this.portraits[characterId].destroy();
-    }
-
-    const expressionKey = expression || charData.defaultExpression || 'neutral';
-    const texKey = charData.portraits && charData.portraits[expressionKey] ? charData.portraits[expressionKey] : `portrait_${characterId}_${expressionKey}`;
-    
-    if (!this.scene.textures.exists(texKey)) {
-      this._generatePlaceholder(characterId, expressionKey, charData.color || '#ffffff', texKey);
-    }
-
     const x = this._getPositionX(position || 'center');
-    const img = this.scene.add.image(x, this.scene.scale.height * 0.5, texKey).setScale(2);
+    const scale = charData.scale ?? Data.theme?.portraits?.scale ?? 1;
+    const baseY = Data.theme?.portraits?.baseY ?? 0.5;
+    const y = this.scene.scale.height * baseY;
+
+    const oldImg = this.portraits[characterId];
+    const isSamePosition = oldImg && oldImg.x === x;
+
+    const img = this.scene.add.image(x, y, texKey).setScale(scale);
     img.zIndex = zIndex;
     this.container.add(img);
     this.container.sort('zIndex');
     this.portraits[characterId] = img;
 
-    // Fade in
+    if (oldImg) {
+      if (isSamePosition) {
+        // Cross-fade expression
+        img.setAlpha(0);
+        this.scene.tweens.add({
+          targets: img,
+          alpha: 1,
+          duration: 200,
+          onComplete: () => oldImg.destroy()
+        });
+      } else {
+        // Different position, fade old out, slide new in
+        this.scene.tweens.add({
+          targets: oldImg,
+          alpha: 0,
+          duration: 150,
+          onComplete: () => oldImg.destroy()
+        });
+        this._slideIn(img, position || 'center', x, scale);
+      }
+    } else {
+      // Fresh appearance, slide in
+      this._slideIn(img, position || 'center', x, scale);
+    }
+  }
+
+  _slideIn(img, position, targetX, targetScale) {
     img.setAlpha(0);
+    const W = this.scene.scale.width;
+    
+    // Start off-screen based on position
+    if (position === 'left' || position === 'center-left') {
+      img.x = -img.width * targetScale;
+    } else if (position === 'right' || position === 'center-right') {
+      img.x = W + img.width * targetScale;
+    } else {
+      // Center comes from bottom
+      img.y += 100;
+    }
+
     this.scene.tweens.add({
       targets: img,
       alpha: 1,
-      duration: 200
+      x: targetX,
+      y: img.y - (position === 'center' ? 100 : 0),
+      duration: 300,
+      ease: 'Power2'
     });
   }
 
@@ -58,7 +94,7 @@ export class CharacterSystem {
       this.scene.tweens.add({
         targets: img,
         alpha: 0,
-        duration: 150,
+        duration: 200,
         onComplete: () => {
           img.destroy();
           delete this.portraits[characterId];

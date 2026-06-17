@@ -241,7 +241,7 @@
       "id": "section_event_sfx",
       "type": "event",
       "eventType": "sfx",
-      "eventValue": "click",
+      "eventValue": "audio/sfx/click",
       "eventVolume": 0.5,
       "next": "section_event_bg_change"
     },

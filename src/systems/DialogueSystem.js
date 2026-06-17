@@ -1,5 +1,6 @@
 import { Data } from './DataLoader.js';
 import { Settings } from './SettingsSystem.js';
+import { parseRichText, renderRichTextUpTo } from './RichTextHelper.js';
 
 /**
  * DialogueSystem — renders text boxes, typewriter effect,
@@ -24,7 +25,7 @@ export class DialogueSystem {
     };
 
     // Container for all dialogue UI elements
-    this.container = scene.add.container(0, 0).setDepth(100);
+    this.container = scene.add.container(0, 0).setDepth(100).setScrollFactor(0);
 
     // Styling from theme
     this.textStyle = {
@@ -63,6 +64,7 @@ export class DialogueSystem {
 
   _buildUI() {
     const { x, y, w, h, paddingX, paddingY, nameplateHeight } = this.box;
+    const theme = Data.theme?.dialogue || {};
 
     // Text box background (procedural)
     this.bg = this.scene.add.graphics();
@@ -71,17 +73,28 @@ export class DialogueSystem {
 
     // Nameplate label
     this.nameplate = this.scene.add.text(x + paddingX, y - nameplateHeight + 4, '', {
-      fontSize: '14px',
-      fontFamily: 'monospace',
+      fontSize: theme.nameplateSize ? `${theme.nameplateSize}px` : '14px',
+      fontFamily: theme.nameplateFont ?? 'monospace',
       color: '#ffffff',
-      backgroundColor: '#222244',
+      backgroundColor: theme.nameplateColor ?? '#222244',
       padding: { x: 8, y: 4 }
     });
     this.container.add(this.nameplate);
 
-    // Dialogue text
-    this.text = this.scene.add.text(x + paddingX, y + paddingY, '', this.textStyle);
-    this.container.add(this.text);
+    // Dialogue text using DOM for Rich Text
+    this.textDOM = this.scene.add.dom(x + paddingX, y + paddingY, 'div');
+    this.textDOM.setOrigin(0, 0);
+    this.textDOM.setScrollFactor(0);
+    this.textDOM.node.style.width = `${w - paddingX * 2}px`;
+    this.textDOM.node.style.height = `${h - paddingY * 2}px`;
+    this.textDOM.node.style.fontFamily = this.textStyle.fontFamily;
+    this.textDOM.node.style.fontSize = this.textStyle.fontSize;
+    this.textDOM.node.style.color = this.textStyle.color;
+    this.textDOM.node.style.lineHeight = '1.4';
+    this.textDOM.node.style.overflow = 'hidden';
+    this.textDOM.node.style.pointerEvents = 'none';
+    // Do NOT add to container, as nested DOMElements break under CSS scale transforms
+    // this.container.add(this.textDOM);
 
     // Continue indicator (blinking arrow)
     this.continueArrow = this.scene.add.text(
@@ -99,7 +112,10 @@ export class DialogueSystem {
     this.container.add(this.choiceContainer);
 
     // Initially hidden
-    this.setVisible(false);
+    this.container.setAlpha(0);
+    this.container.setVisible(false);
+    this.textDOM.setAlpha(0);
+    this.textDOM.setVisible(false);
   }
 
   _drawTextBox() {
@@ -107,23 +123,64 @@ export class DialogueSystem {
     const g = this.bg;
     g.clear();
 
+    // Parse theme background color (supports #RRGGBB or #RRGGBBAA)
+    const theme = Data.theme?.dialogue || {};
+    const bgColorStr = theme.backgroundColor || '#0a0a1a';
+    const hexPart = bgColorStr.slice(1, 7);
+    const alphaPart = bgColorStr.length === 9 ? parseInt(bgColorStr.slice(7, 9), 16) / 255 : 0.92;
+    const bgColor = parseInt(hexPart, 16) || 0x0a0a1a;
+
+    const borderColorStr = theme.borderColor || '#335588';
+    const borderColor = parseInt(borderColorStr.slice(1, 7), 16) || 0x335588;
+    const borderRadius = theme.borderRadius ?? 8;
+
     // Shadow
     g.fillStyle(0x000000, 0.4);
-    g.fillRoundedRect(x + 3, y + 3, w, h, 8);
+    g.fillRoundedRect(x + 3, y + 3, w, h, borderRadius);
 
     // Main panel
-    g.fillStyle(0x0a0a1a, 0.92);
-    g.fillRoundedRect(x, y, w, h, 8);
+    g.fillStyle(bgColor, alphaPart);
+    g.fillRoundedRect(x, y, w, h, borderRadius);
 
     // Border
-    g.lineStyle(2, 0x335588, 0.8);
-    g.strokeRoundedRect(x, y, w, h, 8);
+    g.lineStyle(2, borderColor, 0.8);
+    g.strokeRoundedRect(x, y, w, h, borderRadius);
   }
 
   /* ── Public API ────────────────────────────── */
 
   setVisible(visible) {
-    this.container.setVisible(visible);
+    const theme = Data.theme?.dialogue || {};
+    const duration = theme.transitionDuration ?? 0;
+
+    if (duration > 0) {
+      if (visible && (!this.container.visible || this.container.alpha === 0)) {
+        this.container.setAlpha(0);
+        this.container.setVisible(true);
+        this.textDOM.setAlpha(0);
+        this.textDOM.setVisible(true);
+        this.scene.tweens.add({
+          targets: [this.container, this.textDOM],
+          alpha: 1,
+          duration: duration
+        });
+      } else if (!visible && this.container.visible) {
+        this.scene.tweens.add({
+          targets: [this.container, this.textDOM],
+          alpha: 0,
+          duration: duration,
+          onComplete: () => {
+            this.container.setVisible(false);
+            this.textDOM.setVisible(false);
+          }
+        });
+      }
+    } else {
+      this.container.setAlpha(1);
+      this.container.setVisible(visible);
+      this.textDOM.setAlpha(1);
+      this.textDOM.setVisible(visible);
+    }
   }
 
   /**
@@ -147,49 +204,20 @@ export class DialogueSystem {
       this.nameplate.setVisible(false);
     }
 
-    // Extract tags
-    this._tags = [];
-    let cleanText = '';
-    let match;
-    const regex = /\[(show|hide|anim):([^\]]+)\]/gi;
-    let lastIdx = 0;
-    const strText = text || '';
-    
-    while ((match = regex.exec(strText)) !== null) {
-      cleanText += strText.slice(lastIdx, match.index);
-      
-      const action = match[1].toLowerCase();
-      let target = match[2].trim();
-      let animKey = null;
-      
-      if (action === 'anim') {
-        const parts = target.split(':');
-        if (parts.length >= 2) {
-          target = parts[0].trim();
-          animKey = parts[1].trim();
-        }
-      }
-
-      this._tags.push({
-        index: cleanText.length,
-        action: action,
-        target: target,
-        animKey: animKey
-      });
-      lastIdx = regex.lastIndex;
-    }
-    cleanText += strText.slice(lastIdx);
+    // Parse tags and prepare tokens
+    const parsed = parseRichText(text || '');
+    this._tokens = parsed.tokens;
+    this._tags = parsed.engineTags;
+    this._totalChars = parsed.totalChars;
 
     // Start typewriter
-    this._fullText = cleanText;
-    this._displayedText = '';
     this._charIndex = 0;
     this._isTyping = true;
     this.continueArrow.setAlpha(0);
     this.hideChoices();
 
     // Clear and start
-    this.text.setText('');
+    this.textDOM.node.innerHTML = '';
     this._typeNextChar();
   }
 
@@ -203,11 +231,11 @@ export class DialogueSystem {
         else if (tag.action === 'anim' && tag.target && tag.animKey) {
           // Play inline animation
           let targetObj = null;
-          if (this.scene.layers?.layers?.has(tag.target)) targetObj = this.scene.layers.layers.get(tag.target).image;
-          else if (this.scene.characters?.activeSprites?.has(tag.target)) targetObj = this.scene.characters.activeSprites.get(tag.target);
+          if (this.scene.layers?.layers?.[tag.target]) targetObj = this.scene.layers.layers[tag.target];
+          else if (this.scene.characters?.portraits?.[tag.target]) targetObj = this.scene.characters.portraits[tag.target];
           
-          if (targetObj && this.scene.sys.game.scene.keys.BootScene.Data?.animations) {
-            const animData = this.scene.sys.game.scene.keys.BootScene.Data.animations[tag.animKey];
+          if (targetObj) {
+            const animData = Data.animations?.[tag.animKey];
             if (animData) {
               import('./AnimationRunner.js').then(({ AnimationRunner }) => {
                 AnimationRunner.play(this.scene, targetObj, animData);
@@ -218,7 +246,7 @@ export class DialogueSystem {
       }
     }
 
-    if (this._charIndex >= this._fullText.length) {
+    if (this._charIndex >= this._totalChars) {
       this._isTyping = false;
       this.continueArrow.setAlpha(1);
       // Blink the arrow
@@ -234,8 +262,7 @@ export class DialogueSystem {
     }
 
     this._charIndex++;
-    this._displayedText = this._fullText.slice(0, this._charIndex);
-    this.text.setText(this._displayedText);
+    this.textDOM.node.innerHTML = renderRichTextUpTo(this._tokens, this._charIndex);
 
     this._timer = this.scene.time.delayedCall(this.textSpeed, () => {
       this._typeNextChar();
@@ -256,9 +283,8 @@ export class DialogueSystem {
       }
     }
 
-    this._charIndex = this._fullText.length;
-    this._displayedText = this._fullText;
-    this.text.setText(this._fullText);
+    this._charIndex = this._totalChars;
+    this.textDOM.node.innerHTML = renderRichTextUpTo(this._tokens, this._totalChars);
     this._isTyping = false;
     this.continueArrow.setAlpha(1);
     if (this._arrowTween) this._arrowTween.destroy();
@@ -326,7 +352,7 @@ export class DialogueSystem {
       choiceText.setInteractive({ useHandCursor: true });
       choiceText.on('pointerover', () => choiceText.setColor('#ffffff'));
       choiceText.on('pointerout', () => choiceText.setColor(c.index === 0 ? '#00ccff' : '#aaaaaa'));
-      choiceText.on('pointerdown', () => {
+      choiceText.on('pointerup', () => {
         if (onSelect) onSelect(i);
       });
 
@@ -406,9 +432,7 @@ export class DialogueSystem {
       return;
     }
 
-    const { x, y, w, h } = this.box;
     const container = this.scene.add.container(0, 0).setDepth(300);
-
     const W = this.scene.scale.width;
     const H = this.scene.scale.height;
 
@@ -420,52 +444,113 @@ export class DialogueSystem {
 
     // Title
     const title = this.scene.add.text(W / 2, 20, 'Dialogue History', {
-      fontSize: '20px', fontFamily: 'monospace', color: '#ffffff',
+      fontSize: '24px', fontFamily: 'monospace', color: '#ffffff',
     }).setOrigin(0.5, 0);
     container.add(title);
 
-    // History lines (last 50, reversed so newest at bottom)
-    const lines = this.history.slice(-50);
-    const lineHeight = 22;
-    const startY = 60;
-    const maxVisible = Math.min(lines.length, 22);
+    // Scrolling Area
+    const margin = 80;
+    const scrollY = 80;
+    const scrollHeight = H - 160;
+    
+    const maskGraphics = this.scene.add.graphics();
+    maskGraphics.fillStyle(0xffffff);
+    maskGraphics.fillRect(margin, scrollY, W - margin * 2, scrollHeight);
+    const mask = new Phaser.Display.Masks.GeometryMask(this.scene, maskGraphics);
+    
+    const scrollContainer = this.scene.add.container(0, scrollY);
+    scrollContainer.setMask(mask);
+    container.add(scrollContainer);
 
-    for (let i = 0; i < maxVisible; i++) {
-      const entry = lines[i];
+    // Build history content (top-to-bottom)
+    let currentY = 0;
+    for (const entry of this.history) {
       const speakerName = entry.speaker ? Data.getCharacter(entry.speaker)?.name || entry.speaker : 'Narrator';
-      const color = entry.speaker ? Data.getCharacter(entry.speaker)?.color || '#cccccc' : '#666688';
-      const label = `${speakerName}: ${entry.text || ''}`;
-      // Truncate long lines
-      const displayText = label.length > 80 ? label.slice(0, 77) + '...' : label;
-
-      const line = this.scene.add.text(40, startY + i * lineHeight, displayText, {
-        fontSize: '12px', fontFamily: 'monospace', color: color,
-        wordWrap: { width: W - 80 },
+      const color = entry.speaker ? Data.getCharacter(entry.speaker)?.color || '#cccccc' : '#8888aa';
+      
+      const nameText = this.scene.add.text(margin, currentY, speakerName, {
+        fontSize: '16px', fontFamily: 'monospace', color: color, fontStyle: 'bold'
       });
-      container.add(line);
+      scrollContainer.add(nameText);
+      currentY += nameText.height + 4;
+
+      const bodyText = this.scene.add.text(margin + 20, currentY, entry.text || '', {
+        fontSize: '18px', fontFamily: 'monospace', color: '#e0e0e0',
+        wordWrap: { width: W - margin * 2 - 40 },
+        lineSpacing: 6
+      });
+      scrollContainer.add(bodyText);
+      currentY += bodyText.height + 16;
+      
+      // Separator
+      const sep = this.scene.add.graphics();
+      sep.lineStyle(1, 0xffffff, 0.1);
+      sep.beginPath();
+      sep.moveTo(margin + 20, currentY);
+      sep.lineTo(W - margin - 20, currentY);
+      sep.strokePath();
+      scrollContainer.add(sep);
+      
+      currentY += 16;
     }
 
+    // Scroll logic
+    let scrollOffset = 0;
+    const maxScroll = Math.max(0, currentY - scrollHeight);
+    
+    // Start scrolled to bottom
+    scrollOffset = -maxScroll;
+    scrollContainer.y = scrollY + scrollOffset;
+
+    const updateScroll = (dy) => {
+      scrollOffset -= dy;
+      scrollOffset = Phaser.Math.Clamp(scrollOffset, -maxScroll, 0);
+      scrollContainer.y = scrollY + scrollOffset;
+    };
+
+    // Mouse wheel
+    this.scene.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+      if (this._historyContainer) updateScroll(deltaY);
+    });
+
+    // Drag scroll
+    let isDragging = false;
+    let lastDragY = 0;
+    
+    // We make a hit area over the scrollable region
+    const hitArea = this.scene.add.zone(W/2, scrollY + scrollHeight/2, W, scrollHeight).setInteractive();
+    container.add(hitArea);
+
+    hitArea.on('pointerdown', (pointer) => {
+      isDragging = true;
+      lastDragY = pointer.y;
+    });
+    this.scene.input.on('pointerup', () => { isDragging = false; });
+    this.scene.input.on('pointermove', (pointer) => {
+      if (!isDragging || !this._historyContainer) return;
+      const dy = pointer.y - lastDragY;
+      updateScroll(-dy);
+      lastDragY = pointer.y;
+    });
+
     // Close hint
-    const hint = this.scene.add.text(W / 2, H - 20, 'Press H or click to close', {
+    const hint = this.scene.add.text(W / 2, H - 30, 'Press H or click outside to close', {
       fontSize: '14px', fontFamily: 'monospace', color: '#666688',
     }).setOrigin(0.5);
     container.add(hint);
 
-    // Click anywhere to close
+    // Click anywhere outside hit area to close
     overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, W, H), Phaser.Geom.Rectangle.Contains);
-    overlay.on('pointerdown', () => {
-      container.destroy();
-      this._historyContainer = null;
+    overlay.on('pointerdown', (pointer) => {
+      if (pointer.y < scrollY || pointer.y > scrollY + scrollHeight) {
+        this.hideHistory();
+      }
     });
 
     this._historyContainer = container;
 
-    // Allow keyboard to close too — wire via scene
     this.scene.input.keyboard.on('keydown-H', () => {
-      if (this._historyContainer) {
-        this._historyContainer.destroy();
-        this._historyContainer = null;
-      }
+      this.hideHistory();
     }, { once: true });
   }
 
@@ -484,5 +569,6 @@ export class DialogueSystem {
     if (this._arrowTween) this._arrowTween.destroy();
     this.hideHistory();
     this.container.destroy();
+    if (this.textDOM) this.textDOM.destroy();
   }
 }

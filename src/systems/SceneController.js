@@ -1,5 +1,6 @@
 import { Data } from './DataLoader.js';
 import { Registry } from './Registry.js';
+import { EventEmitter } from './EventEmitter.js';
 
 /**
  * SceneController — graph-based narrative state machine.
@@ -20,15 +21,8 @@ export class SceneController {
     // Call stack for call_scene sub-scene returns
     this._callStack = [];
 
-    // Callbacks — set by GameScene
-    this.onDialogue = null;     // fn({ speaker, text, expression })
-    this.onChoice = null;       // fn({ prompt, choices[] })
-    this.onChoiceTimeout = null; // fn() — called when timed choice expires
-    this.onSceneEnd = null;     // fn({ text, nextScene })
-    this.onAction = null;       // fn({ type, ... })
-    this.onSceneStart = null;   // fn({ sceneId, background, music })
-    this.onWait = null;         // fn({ duration })
-    this.onBackgroundChange = null;  // fn(backgroundKey)
+    // Event bus for system notifications
+    this.events = new EventEmitter();
   }
 
   /* ── Scene Loading ─────────────────────────── */
@@ -43,15 +37,19 @@ export class SceneController {
     this.currentScene = scene;
     this.isRunning = true;
 
-    if (this.onSceneStart) {
-      this.onSceneStart({
-        sceneId: scene.id,
-        background: scene.background,
-        layers: scene.layers,
-        music: scene.music,
-        layout: scene.layout || null
-      });
+    // Build O(1) node lookup map for this scene
+    this.nodeMap = new Map();
+    if (scene.nodes) {
+      scene.nodes.forEach(n => this.nodeMap.set(n.id, n));
     }
+
+    this.events.emit('sceneStart', {
+      sceneId: scene.id,
+      background: scene.background,
+      layers: scene.layers,
+      music: scene.music,
+      layout: scene.layout || null
+    });
 
     // Start at the target node or fall back to entry
     const nodeId = targetNodeId || (scene.entryNode || scene.nodes?.[0]?.id);
@@ -97,8 +95,8 @@ export class SceneController {
 
     // Any node can trigger a background change via a `background` field.
     // Guard is truthy — background: null must NOT clear the screen mid-scene.
-    if (node.background && this.onBackgroundChange) {
-      this.onBackgroundChange(node.background);
+    if (node.background) {
+      this.events.emit('backgroundChange', node.background);
     }
 
     const typeDef = Registry.getNodeType(node.type);
@@ -126,11 +124,7 @@ export class SceneController {
       while (this.vars.scopes && this.vars.scopes.length > 1) {
         this.vars.popScope();
       }
-      this.isRunning = false;
-      if (this.onSceneEnd) {
-        this.onSceneEnd({ text: node?.text || null, nextScene: node.nextScene });
-      }
-      return;
+      this.events.emit('sceneEnd', { text: node?.text || null, nextScene: node.nextScene });
     }
 
     // If there's a return point on the call stack, go back
@@ -143,15 +137,19 @@ export class SceneController {
       this.currentScene = pop.scene;
       this.isRunning = true;
 
-      // Notify UI layer to restore scene visuals (background, music)
-      if (this.onSceneStart) {
-        this.onSceneStart({
-          sceneId: pop.scene.id,
-          background: pop.scene.background,
-          layers: pop.scene.layers,
-          music: pop.scene.music
-        });
+      // Rebuild node map for the restored scene
+      this.nodeMap = new Map();
+      if (pop.scene.nodes) {
+        pop.scene.nodes.forEach(n => this.nodeMap.set(n.id, n));
       }
+
+      // Notify UI layer to restore scene visuals (background, music)
+      this.events.emit('sceneStart', {
+        sceneId: pop.scene.id,
+        background: pop.scene.background,
+        layers: pop.scene.layers,
+        music: pop.scene.music
+      });
 
       // Jump to the return node, or advance if no return node specified
       if (pop.returnNode) {
@@ -170,12 +168,10 @@ export class SceneController {
 
     // Genuine end — no call stack, no nextScene
     this.isRunning = false;
-    if (this.onSceneEnd) {
-      this.onSceneEnd({
-        text: node?.text || null,
-        nextScene: null
-      });
-    }
+    this.events.emit('sceneEnd', {
+      text: node?.text || null,
+      nextScene: null
+    });
   }
 
   /* ── Built-in Node Behaviors ───────────────── */
@@ -369,153 +365,19 @@ export class SceneController {
     return null;
   }
 
-  presentTimedChoice(node) {
-    const validChoices = (node.choices || []).filter(c => this.vars.evaluate(c.condition));
-    if (validChoices.length === 0) {
-      this.jumpToId(node.default_next || node.next);
-      return;
-    }
-    
-    this._pendingChoices = validChoices;
-    this.isRunning = false;
-    if (this.onChoice) {
-      // Let the DialogueSystem know it's a timed choice, but for now we'll handle the timer here
-      this.onChoice({
-        prompt: node.prompt || null,
-        choices: validChoices.map(c => ({
-          text: c.text,
-          index: validChoices.indexOf(c),
-          next: c.next,
-          nextScene: c.nextScene,
-          setFlag: c.setFlag,
-          setValue: c.setValue,
-          toggleFlag: c.toggleFlag,
-          addFlag: c.addFlag,
-          delta: c.delta
-        })),
-        duration: node.duration || 5000
-      });
-
-      // Setup the fallback timer
-      this._choiceTimer = this.scene.time.addEvent({
-        delay: node.duration || 5000,
-        callback: () => {
-          // Route through the callback layer rather than accessing scene.dialogue directly
-          if (this.onChoiceTimeout) this.onChoiceTimeout();
-          this._choiceTimer = null;
-          this.isRunning = true;
-          this.jumpToId(node.default_next || node.next);
-        }
-      });
-    } else {
-      this.isRunning = true;
-      this.advance();
-    }
-  }
+  
 
   /* ── Node Types ────────────────────────────── */
 
-  showDialogue(node) {
-    if (this.onDialogue) {
-      this.onDialogue({
-        speaker: node.speaker,
-        text: node.text,
-        expression: node.expression || null,
-        position: node.position || 'center',
-        zIndex: node.zIndex || 0,
-        autoAdvance: node.autoAdvance || false,
-        waitTime: node.waitTime || 0,
-        comment: node.comment || null
-      });
-    }
+  
 
-    if (node.autoAdvance) {
-      this._autoTimer = this.scene.time.delayedCall(node.waitTime || 2000, () => {
-        this.advance();
-      });
-    }
-    // Otherwise, wait for player input → calls advance()
-  }
+  
 
-  presentChoices(node) {
-    const available = (node.choices || []).filter(c =>
-      this.vars.evaluate(c.condition)
-    );
+  
 
-    if (available.length === 0) {
-      // No valid choices — follow node.next (if any) or end
-      if (node.next) this.jumpToId(node.next);
-      else this.endScene();
-      return;
-    }
+  
 
-    this._pendingChoices = available;
-
-    if (this.onChoice) {
-      this.onChoice({
-        prompt: node.prompt || null,
-        choices: available.map(c => ({
-          text: c.text,
-          index: available.indexOf(c),
-          next: c.next,
-          nextScene: c.nextScene,
-          setFlag: c.setFlag,
-          setValue: c.setValue,
-          toggleFlag: c.toggleFlag,
-          addFlag: c.addFlag,
-          delta: c.delta
-        }))
-      });
-    }
-  }
-
-  evaluateCondition(node) {
-    const result = this.vars.evaluate(node.condition);
-    if (result && node.next) {
-      this.jumpToId(node.next);
-    } else if (!result && node.else) {
-      this.jumpToId(node.else);
-    } else if (node.next) {
-      this.jumpToId(node.next);
-    } else {
-      this.endScene();
-    }
-  }
-
-  fireEvent(node) {
-    if (this.onAction) {
-      this.onAction({
-        type: node.eventType || 'sfx',
-        value: node.eventValue || null,
-        target: node.eventTarget || null,
-        volume: node.eventVolume != null ? node.eventVolume : null,
-        setFlag: node.setFlag,
-        setValue: node.setValue,
-        toggleFlag: node.toggleFlag,
-        addFlag: node.addFlag,
-        delta: node.delta
-      });
-    }
-
-    if (node.next) {
-      this.jumpToId(node.next);
-    } else {
-      this.endScene();
-    }
-  }
-
-  doWait(node) {
-    const duration = node.duration || 1000;
-
-    if (this.onWait) {
-      this.onWait({ duration });
-    }
-
-    this._autoTimer = this.scene.time.delayedCall(duration, () => {
-      if (node.next) this.jumpToId(node.next);
-      else this.endScene();
-    });
-  }
+  
 
   /* ── Navigation ────────────────────────────── */
 
@@ -546,7 +408,7 @@ export class SceneController {
       return;
     }
 
-    const node = this.currentScene.nodes.find(n => n.id === nodeId);
+    const node = this.nodeMap ? this.nodeMap.get(nodeId) : null;
     if (node) {
       this.processNode(node);
     } else {
@@ -588,6 +450,15 @@ export class SceneController {
     }
   }
 
+  /** Called when user submits text input */
+  submitTextInput(variable, value) {
+    if (variable) {
+      this.vars.set(variable, value);
+    }
+    this.isRunning = true;
+    this.advance();
+  }
+
   /* ── State ─────────────────────────────────── */
 
   get awaitingInput() {
@@ -611,5 +482,6 @@ export class SceneController {
     this.isRunning = false;
     this.currentScene = null;
     this.currentNode = null;
+    this.events.removeAllListeners();
   }
 }

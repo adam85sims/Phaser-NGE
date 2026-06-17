@@ -1,7 +1,7 @@
-import { Registry } from '../systems/Registry.js';
+import { Registry } from '../../src/systems/Registry.js';
 
 // --- DIALOGUE ---
-Registry.registerNodeType('dialogue', {
+Registry.extendNodeType('dialogue', {
   label: 'Dialogue',
   color: '#3b82f6',
   defaultData: () => ({ speaker: '', text: 'New dialogue', next: '' }),
@@ -144,7 +144,7 @@ Registry.registerNodeType('dialogue', {
 });
 
 // --- CHOICE ---
-Registry.registerNodeType('choice', {
+Registry.extendNodeType('choice', {
   label: 'Choice',
   color: '#f59e0b',
   defaultData: () => ({ prompt: '', choices: [{ text: 'Choice 1', next: '' }], next: '' }),
@@ -220,7 +220,7 @@ Registry.registerNodeType('choice', {
 });
 
 // --- CONDITION ---
-Registry.registerNodeType('condition', {
+Registry.extendNodeType('condition', {
   label: 'Condition',
   color: '#10b981',
   defaultData: () => ({ condition: 'flag == true', next: '', else: '' }),
@@ -253,7 +253,7 @@ Registry.registerNodeType('condition', {
 });
 
 // --- EVENT ---
-Registry.registerNodeType('event', {
+Registry.extendNodeType('event', {
   label: 'Event',
   color: '#8b5cf6',
   defaultData: () => ({ eventType: 'sfx', eventValue: '', next: '' }),
@@ -389,8 +389,63 @@ Registry.registerNodeType('event', {
   }
 });
 
+// --- TEXT INPUT ---
+Registry.extendNodeType('text_input', {
+  label: 'Text Input',
+  color: '#e879f9',
+  defaultData: () => ({ prompt: 'Enter text:', variable: 'player_name', maxLength: 50, next: '' }),
+  renderEditor: (node, ctx) => {
+    const nodeOpts = ctx.otherNodes.map(n => `<option value="${n.id}"${node.next===n.id?' selected':''}>${n.id}</option>`).join('');
+    return `
+      <div class="form-group"><label>Prompt</label><input value="${(node.prompt||'').replace(/"/g, '&quot;')}" data-field="prompt"/></div>
+      <div class="form-row">
+        <div class="form-group"><label>Variable</label><input value="${node.variable||'player_name'}" data-field="variable"/></div>
+        <div class="form-group"><label>Max Length</label><input type="number" value="${node.maxLength||50}" data-field="maxLength" data-type="number"/></div>
+      </div>
+      <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>
+    `;
+  }
+});
+
+// --- CHAPTER ---
+Registry.extendNodeType('chapter', {
+  label: 'Chapter Title',
+  color: '#f59e0b',
+  defaultData: () => ({ title: 'Chapter 1', subtitle: 'A New Beginning', duration: 3000, next: '' }),
+  renderEditor: (node, ctx) => {
+    const nodeOpts = ctx.otherNodes.map(n => `<option value="${n.id}"${node.next===n.id?' selected':''}>${n.id}</option>`).join('');
+    return `
+      <div class="form-group"><label>Title</label><input value="${(node.title||'').replace(/"/g, '&quot;')}" data-field="title"/></div>
+      <div class="form-group"><label>Subtitle</label><input value="${(node.subtitle||'').replace(/"/g, '&quot;')}" data-field="subtitle"/></div>
+      <div class="form-row"><div class="form-group"><label>Duration (ms)</label><input type="number" value="${node.duration||3000}" data-field="duration" data-type="number"/></div></div>
+      <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>
+    `;
+  }
+});
+
+// --- PARTICLES ---
+Registry.extendNodeType('particles', {
+  label: 'Particle Effect',
+  color: '#10b981',
+  defaultData: () => ({ action: 'start', particleId: 'snow', duration: 0, wait: false, config: '{}', next: '' }),
+  renderEditor: (node, ctx) => {
+    const nodeOpts = ctx.otherNodes.map(n => `<option value="${n.id}"${node.next===n.id?' selected':''}>${n.id}</option>`).join('');
+    return `
+      <div class="form-row"><div class="form-group"><label>Action</label><select data-field="action">
+        <option value="start"${node.action==='start'?' selected':''}>Start</option>
+        <option value="stop"${node.action==='stop'?' selected':''}>Stop</option>
+      </select></div>
+      <div class="form-group"><label>Effect ID</label><input value="${node.particleId||''}" data-field="particleId" placeholder="e.g. snow, rain"/></div></div>
+      <div class="form-group"><label>Config (JSON)</label><textarea data-field="config" rows="3" placeholder='{"speed": 100, "scale": 0.5}'>${(node.config||'{}').replace(/</g, '&lt;')}</textarea></div>
+      <div class="form-row"><div class="form-group"><label>Duration (ms)</label><input type="number" value="${node.duration||0}" data-field="duration" data-type="number"/></div>
+      <div class="form-group"><label style="margin-top:20px"><input type="checkbox" data-field="wait" ${node.wait?'checked':''}/> Wait</label></div></div>
+      <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>
+    `;
+  }
+});
+
 // --- CALL_SCENE ---
-Registry.registerNodeType('call_scene', {
+Registry.extendNodeType('call_scene', {
   label: 'Call Scene',
   color: '#ec4899',
   defaultData: () => ({ sceneId: '', next: '' }),
@@ -417,7 +472,7 @@ Registry.registerNodeType('call_scene', {
 });
 
 // --- MACRO ---
-Registry.registerNodeType('macro', {
+Registry.extendNodeType('macro', {
   label: 'Macro / Prefab',
   color: '#ec4899',
   defaultData: () => ({ sceneId: '', args: {}, next: '' }),
@@ -504,7 +559,7 @@ Registry.registerNodeType('macro', {
 });
 
 // --- WAIT ---
-Registry.registerNodeType('wait', {
+Registry.extendNodeType('wait', {
   label: 'Wait',
   color: '#64748b',
   defaultData: () => ({ duration: 1000, next: '' }),
@@ -521,16 +576,25 @@ Registry.registerNodeType('wait', {
 });
 
 // --- END ---
-Registry.registerNodeType('end', {
+Registry.extendNodeType('end', {
   label: 'End Scene',
   color: '#ef4444',
-  defaultData: () => ({ text: '', nextScene: '' }),
+  defaultData: () => ({ text: '', nextScene: '', transition: 'fade', transitionDuration: 600 }),
   getOutputs: () => [], // Ends don't output visually
   renderEditor: (node, ctx) => `
     <div class="form-group"><label>Ending text</label><input value="${(node.text||'').replace(/</g,'&lt;')}" data-field="text"/></div>
     <div class="form-group"><label>Next scene</label><select data-field="nextScene">
       <option value="">— end —</option>${ctx.scenesList.map(s => `<option value="${s}"${node.nextScene===s?' selected':''}>${s}</option>`).join('')}
     </select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Transition</label><select data-field="transition">
+        <option value="fade"${node.transition==='fade'?' selected':''}>Fade to Black</option>
+        <option value="white_fade"${node.transition==='white_fade'?' selected':''}>Fade to White</option>
+        <option value="slide_left"${node.transition==='slide_left'?' selected':''}>Slide Left</option>
+        <option value="slide_right"${node.transition==='slide_right'?' selected':''}>Slide Right</option>
+      </select></div>
+      <div class="form-group"><label>Duration</label><input type="number" value="${node.transitionDuration||600}" data-field="transitionDuration" data-type="number"/></div>
+    </div>
   `,
   executeRuntime: (node, controller) => {
     controller.endScene(node);
@@ -538,7 +602,7 @@ Registry.registerNodeType('end', {
 });
 
 // --- SET VARIABLE ---
-Registry.registerNodeType('set_variable', {
+Registry.extendNodeType('set_variable', {
   label: 'Set Variable',
   color: '#059669',
   defaultData: () => ({ variable: '', value: '', operation: 'set', next: '' }),
@@ -563,7 +627,7 @@ Registry.registerNodeType('set_variable', {
 });
 
 // --- TIMED CHOICE ---
-Registry.registerNodeType('timed_choice', {
+Registry.extendNodeType('timed_choice', {
   label: 'Timed Choice',
   color: '#d97706',
   defaultData: () => ({ duration: 5000, default_next: '', prompt: '', choices: [], next: '' }),
@@ -598,7 +662,7 @@ Registry.registerNodeType('timed_choice', {
 });
 
 // --- RANDOM BRANCH ---
-Registry.registerNodeType('random_branch', {
+Registry.extendNodeType('random_branch', {
   label: 'Random Branch',
   color: '#6366f1',
   defaultData: () => ({ choices: [], next: '' }),
@@ -672,7 +736,7 @@ Registry.registerNodeType('random_branch', {
 });
 
 // --- ANIMATE ---
-Registry.registerNodeType('animate', {
+Registry.extendNodeType('animate', {
   label: 'Animate',
   color: '#0284c7',
   defaultData: () => ({ target: '', property: 'x', value: 0, duration: 1000, easing: 'Linear', wait: false, next: '' }),
@@ -705,7 +769,7 @@ Registry.registerNodeType('animate', {
 });
 
 // --- SHOW OBJECT ---
-Registry.registerNodeType('show_object', {
+Registry.extendNodeType('show_object', {
   label: 'Show Object',
   color: '#14b8a6',
   defaultData: () => ({ target: '', duration: 0, wait: false, next: '' }),
@@ -724,7 +788,7 @@ Registry.registerNodeType('show_object', {
 });
 
 // --- HIDE OBJECT ---
-Registry.registerNodeType('hide_object', {
+Registry.extendNodeType('hide_object', {
   label: 'Hide Object',
   color: '#94a3b8',
   defaultData: () => ({ target: '', duration: 0, wait: false, next: '' }),
@@ -738,7 +802,7 @@ Registry.registerNodeType('hide_object', {
 });
 
 // --- CAMERA ---
-Registry.registerNodeType('camera', {
+Registry.extendNodeType('camera', {
   label: 'Camera',
   color: '#8b5cf6',
   defaultData: () => ({ action: 'shake', value: '', duration: 1000, wait: false, next: '' }),

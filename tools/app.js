@@ -1,5 +1,6 @@
 import { editorState, loadProjectData, markDirty, forceSave, undo, redo, canUndo, canRedo, captureUndoState } from './state.js';
-import '../src/nodes/CoreNodes.js';
+import '../src/nodes/RuntimeNodes.js';
+import './nodes/EditorNodes.js';
 
 // ── Boot ───────────────────────────────────────────────
 async function boot() {

@@ -18,7 +18,7 @@
     "bgmVolume": 0.7,
     "sfxVolume": 1
   },
-  "animations": [
-    "test_anim"
-  ]
+  "animations": [],
+  "width": 1280,
+  "height": 720
 }

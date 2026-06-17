@@ -27,7 +27,7 @@
     "toastFontSize": 24,
     "toastBackgroundColor": "#00000088",
     "menu": {
-      "background": "http://localhost:3000/assets/backgrounds/BG_throne_00001_.png",
+      "background": null,
       "title": {
         "text": "Welcome to NGE",
         "x": 640,
@@ -80,7 +80,7 @@
     "splash": {
       "enabled": false,
       "background": "#0a0a1a",
-      "logo": "{\"category\":\"backgrounds\",\"name\":\"throne_00001_.png\"}",
+      "logo": null,
       "logoScale": 1,
       "fadeIn": 1000,
       "hold": 2000,

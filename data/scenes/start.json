@@ -10,34 +10,15 @@
       "type": "dialogue",
       "speaker": "narrator",
       "text": "This is Dave.",
-      "x": -920,
+      "x": -1040,
       "y": -180,
       "next": "bgIntro",
       "position": ""
     },
     {
-      "id": "dialogue_1",
-      "type": "dialogue",
-      "x": -460,
-      "y": -60,
-      "speaker": "narrator",
-      "text": "Dave is about to have a very very bad day. [show:dave_fullbody_00001_]",
-      "next": "timed_choice_1"
-    },
-    {
-      "id": "show_object_1",
-      "type": "show_object",
-      "x": -720,
-      "y": -60,
-      "target": "characters/Elena_neutral_00001_.png",
-      "next": "dialogue_1",
-      "wait": "on",
-      "duration": 2
-    },
-    {
       "id": "bgIntro",
       "type": "event",
-      "x": -700,
+      "x": -820,
       "y": -180,
       "eventType": "bgm",
       "eventValue": "audio/bgm/bgm_imacomposernow",
@@ -46,26 +27,18 @@
     {
       "id": "wait_1",
       "type": "wait",
-      "x": -440,
+      "x": -600,
       "y": -180,
       "duration": 10000,
-      "next": "show_object_1"
+      "next": "event_1"
     },
     {
-      "id": "timed_choice_1",
-      "type": "timed_choice",
-      "x": -140,
-      "y": -160,
-      "duration": 5000,
-      "default_next": "",
-      "prompt": "Click this.",
-      "choices": [
-        {
-          "text": "This?",
-          "condition": "",
-          "next": ""
-        }
-      ],
+      "id": "event_1",
+      "type": "event",
+      "x": -380,
+      "y": -180,
+      "eventType": "camera_flash",
+      "eventValue": "",
       "next": ""
     }
   ],
@@ -77,7 +50,8 @@
       "y": 203,
       "scale": 1.5,
       "zIndex": 1,
-      "opacity": 1
+      "opacity": 1,
+      "hidden": false
     }
   ]
 }

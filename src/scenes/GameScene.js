@@ -9,6 +9,9 @@ import { AudioSystem } from '../systems/AudioSystem.js';
 import { Settings } from '../systems/SettingsSystem.js';
 import { LayerSystem } from '../systems/LayerSystem.js';
 import { LayoutSystem } from '../systems/LayoutSystem.js';
+import { TransitionSystem } from '../systems/TransitionSystem.js';
+import { ChapterSystem } from '../systems/ChapterSystem.js';
+import { ParticleSystem } from '../systems/ParticleSystem.js';
 
 /**
  * GameScene — the main gameplay loop.
@@ -42,6 +45,8 @@ export class GameScene extends Phaser.Scene {
     this.characters = new CharacterSystem(this);
     this.saveSys = new SaveSystem(this.vars, this.sceneCtrl);
     this.audio = new AudioSystem(this);
+    this.chapter = new ChapterSystem(this);
+    this.particles = new ParticleSystem(this);
 
     // ── Wire SceneController → Systems ──
     this._wireSceneController();
@@ -63,7 +68,7 @@ export class GameScene extends Phaser.Scene {
   _wireSceneController() {
     const ctrl = this.sceneCtrl;
 
-    ctrl.onDialogue = (data) => {
+    ctrl.events.on('dialogue', (data) => {
       if (data.speaker) {
         this.characters.show(data.speaker, data.expression || 'neutral', data.position || 'center', data.zIndex || 0);
       }
@@ -71,9 +76,9 @@ export class GameScene extends Phaser.Scene {
       this.dialogue.showDialogue(
         data.speaker, data.text, data.expression, null
       );
-    };
+    });
 
-    ctrl.onChoice = (data) => {
+    ctrl.events.on('choice', (data) => {
       this.characters.hideAll();
       this.dialogue.showChoices(
         data.prompt,
@@ -83,9 +88,30 @@ export class GameScene extends Phaser.Scene {
           ctrl.selectChoice(choiceIndex);
         }
       );
-    };
+    });
 
-    ctrl.onSceneStart = (data) => {
+    ctrl.events.on('textInput', (data) => {
+      this._showTextInputOverlay(data.prompt, data.variable, data.maxLength);
+    });
+
+    ctrl.events.on('chapter', (data) => {
+      this.dialogue.setVisible(false);
+      this.characters.hideAll();
+      this.chapter.showChapterCard(data.title, data.subtitle, data.duration, () => {
+        ctrl.isRunning = true;
+        if (data.next) {
+          ctrl.jumpToId(data.next);
+        } else {
+          ctrl.advance();
+        }
+      });
+    });
+
+    ctrl.events.on('particles', (data) => {
+      this.particles.handleEvent(data);
+    });
+
+    ctrl.events.on('sceneStart', (data) => {
       this.layers.loadSceneLayers(data.layers, data.background);
       this.cameras.main.fadeIn(400, 0, 0, 0);
       if (data.music) this.audio.playBGM(data.music);
@@ -97,28 +123,32 @@ export class GameScene extends Phaser.Scene {
 
       // Auto-save on scene transition (slot 9)
       this.saveSys.autoSave();
-    };
+    });
 
-    ctrl.onSceneEnd = (data) => {
+    ctrl.events.on('sceneEnd', (data) => {
       this._cleanupUI();
 
-      // If the scene end specifies a next scene, transition after a pause
+      // If the scene end specifies a next scene, transition
       if (data.nextScene) {
-        this.time.addEvent({
-          delay: 2500,
-          callback: () => {
-            this._cleanupUI();
-            this.cameras.main.fadeOut(300, 0, 0, 0);
-            this.cameras.main.once('camerafadeoutcomplete', () => {
-              ctrl.startScene(data.nextScene);
-            });
-          },
-          callbackScope: this
-        });
-      }
-    };
+        // Find if end node has transition type
+        const endNode = Object.values(Data.scenes[ctrl.currentScene]?.nodes || {}).find(n => n.id === ctrl.currentNode?.id || (n.type === 'end' && n.nextScene === data.nextScene));
+        const tType = endNode?.transition || 'fade';
+        const tDur = endNode?.transitionDuration || 600;
 
-    ctrl.onAction = (data) => {
+        TransitionSystem.runTransition(this, tType, tDur,
+          // onComplete
+          () => {
+            ctrl.startScene(data.nextScene);
+          },
+          // onMidpoint
+          () => {
+            this._cleanupUI();
+          }
+        );
+      }
+    });
+
+    ctrl.events.on('action', (data) => {
       // Handle event nodes
       switch (data.type) {
         case 'sfx': {
@@ -168,10 +198,10 @@ export class GameScene extends Phaser.Scene {
           let targetObj = null;
           
           if (this.layers.layers[targetId]) targetObj = this.layers.layers[targetId];
-          else if (this.characters.activeSprites && this.characters.activeSprites.get && this.characters.activeSprites.has(targetId)) targetObj = this.characters.activeSprites.get(targetId);
+          else if (this.characters.portraits[targetId]) targetObj = this.characters.portraits[targetId];
           
-          if (targetObj && this.sys.game.scene.keys.BootScene.Data?.animations) {
-            const animData = this.sys.game.scene.keys.BootScene.Data.animations[animKey];
+          if (targetObj && Data.animations) {
+            const animData = Data.animations[animKey];
             if (animData) {
               import('../systems/AnimationRunner.js').then(({ AnimationRunner }) => {
                 AnimationRunner.play(this, targetObj, animData);
@@ -207,21 +237,21 @@ export class GameScene extends Phaser.Scene {
           onComplete: () => toast.destroy()
         });
       }
-    };
+    });
 
-    ctrl.onWait = (data) => {
+    ctrl.events.on('wait', (data) => {
       // Show a brief "..." indicator
       this.dialogue.setVisible(false);
-    };
+    });
 
-    ctrl.onChoiceTimeout = () => {
+    ctrl.events.on('choiceTimeout', () => {
       this.dialogue.hideChoices();
-    };
+    });
 
-    ctrl.onBackgroundChange = (key) => {
+    ctrl.events.on('backgroundChange', (key) => {
       // Legacy support
       this.layers.loadSceneLayers([], key);
-    };
+    });
   }
 
   /* ── INPUT ──────────────────────────────────── */
@@ -229,7 +259,7 @@ export class GameScene extends Phaser.Scene {
   _setupInput() {
     this.input.keyboard.on('keydown-SPACE', () => this._handleAdvance());
     this.input.keyboard.on('keydown-ENTER', () => this._handleAdvance());
-    this.input.on('pointerdown', () => this._handleAdvance());
+    this.input.on('pointerup', () => this._handleAdvance());
 
     // Number keys for choices
     for (let i = 0; i < 9; i++) {
@@ -258,14 +288,15 @@ export class GameScene extends Phaser.Scene {
       });
     });
 
-    // Escape: return to menu
     this.input.keyboard.on('keydown-ESC', () => {
-      this._cleanupUI();
       this.dialogue.hideHistory();
-      this.cameras.main.fadeOut(300, 0, 0, 0);
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.start('MenuScene');
-      });
+      TransitionSystem.runTransition(this, 'fade', 600,
+        null,
+        () => {
+          this._cleanupUI();
+          this.scene.start('MenuScene');
+        }
+      );
     });
 
     // H: toggle dialogue history
@@ -377,9 +408,16 @@ export class GameScene extends Phaser.Scene {
    */
   _loadAndPlay(type, key, onReady) {
     const subdir = type === 'bgm' ? 'bgm' : 'sfx';
-    const exts = ['mp3', 'ogg', 'wav', 'opus', 'm4a'];
 
     const tryLoad = async () => {
+      // If it already has an extension, fetch directly
+      if (key.includes('.')) {
+        this.load.audio(key, `/assets/${key}`);
+        this.load.once('complete', () => onReady());
+        this.load.start();
+        return;
+      }
+
       const isFullPath = key.includes('/');
       const baseKey = isFullPath ? key : `audio/${subdir}/${key}`;
       

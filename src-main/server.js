@@ -195,6 +195,18 @@ export async function startServer(port = 0, isDev = false) {
       if (payload.variables) await fs.writeFile(path.join(dataDir, 'variables.json'), JSON.stringify(payload.variables, null, 2));
       if (payload.theme) await fs.writeFile(path.join(dataDir, 'theme.json'), JSON.stringify(payload.theme, null, 2));
 
+      if (payload.scenes) {
+        for (const [id, sceneData] of Object.entries(payload.scenes)) {
+          await fs.writeFile(path.join(scenesDir, `${id}.json`), JSON.stringify(sceneData, null, 2));
+        }
+      }
+
+      if (payload.animations) {
+        for (const [id, animData] of Object.entries(payload.animations)) {
+          await fs.writeFile(path.join(animationsDir, `${id}.json`), JSON.stringify(animData, null, 2));
+        }
+      }
+
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });

@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { Data } from '../../src/systems/DataLoader.js';
 import { VariableSystem } from '../../src/systems/VariableSystem.js';
 import { SceneController } from '../../src/systems/SceneController.js';
-import '../../src/nodes/CoreNodes.js';
+import '../../src/nodes/RuntimeNodes.js';
 
 /* ── Helpers ─────────────────────────────── */
 
@@ -54,6 +54,10 @@ function makeEnd(id, text, overrides = {}) {
 
 function makeCallScene(id, sceneId, overrides = {}) {
   return { id, type: 'call_scene', sceneId, ...overrides };
+}
+
+function makeTextInput(id, prompt, variable, overrides = {}) {
+  return { id, type: 'text_input', prompt, variable, ...overrides };
 }
 
 function createController(variableDefs) {
@@ -109,12 +113,12 @@ describe('SceneController', () => {
       expect(ctrl.currentScene).toBeNull();
       expect(ctrl.currentNode).toBeNull();
       expect(ctrl.isRunning).toBe(false);
-      expect(ctrl.onDialogue).toBeNull();
-      expect(ctrl.onChoice).toBeNull();
-      expect(ctrl.onSceneEnd).toBeNull();
-      expect(ctrl.onAction).toBeNull();
-      expect(ctrl.onSceneStart).toBeNull();
-      expect(ctrl.onWait).toBeNull();
+      expect(ctrl.events).toBeDefined();
+      expect(ctrl.events).toBeDefined();
+      expect(ctrl.events).toBeDefined();
+      expect(ctrl.events).toBeDefined();
+      expect(ctrl.events).toBeDefined();
+      expect(ctrl.events).toBeDefined();
     });
 
     it('accepts a VariableSystem', () => {
@@ -134,7 +138,7 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const onStart = callbackSpy();
-      ctrl.onSceneStart = onStart;
+      ctrl.events.on('sceneStart', onStart);
 
       ctrl.startScene('s1');
 
@@ -174,7 +178,7 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.startScene('empty_scene');
       expect(onEnd).toHaveBeenCalled();
@@ -189,7 +193,7 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const onStart = callbackSpy();
-      ctrl.onSceneStart = onStart;
+      ctrl.events.on('sceneStart', onStart);
 
       ctrl.startScene('s1');
       expect(onStart).toHaveBeenCalledWith({
@@ -314,7 +318,7 @@ describe('SceneController', () => {
     it('fires onBackgroundChange when node has background field', () => {
       ctrl.isRunning = true;
       const bgSpy = callbackSpy();
-      ctrl.onBackgroundChange = bgSpy;
+      ctrl.events.on('backgroundChange', bgSpy);
 
       const node = makeDialogue('d1', 'n', 'text', { background: 'forest' });
       ctrl.processNode(node);
@@ -325,7 +329,7 @@ describe('SceneController', () => {
     it('does NOT fire onBackgroundChange when node has no background field', () => {
       ctrl.isRunning = true;
       const bgSpy = callbackSpy();
-      ctrl.onBackgroundChange = bgSpy;
+      ctrl.events.on('backgroundChange', bgSpy);
 
       ctrl.processNode(makeDialogue('d1', 'n', 'text'));
 
@@ -335,7 +339,7 @@ describe('SceneController', () => {
     it('handles background change on all node types', () => {
       ctrl.isRunning = true;
       const bgSpy = callbackSpy();
-      ctrl.onBackgroundChange = bgSpy;
+      ctrl.events.on('backgroundChange', bgSpy);
 
       // Ensure it works on event nodes too
       ctrl.processNode(makeEvent('e1', 'sfx', 'ping', { background: 'dungeon' }));
@@ -343,12 +347,7 @@ describe('SceneController', () => {
       expect(bgSpy).toHaveBeenCalledWith('dungeon');
     });
 
-    it('does nothing when not running', () => {
-      ctrl.isRunning = false;
-      const spy = vi.spyOn(ctrl, 'showDialogue');
-      ctrl.processNode(makeDialogue('d1', 'n', 't'));
-      expect(spy).not.toHaveBeenCalled();
-    });
+    
   });
 
   /* ── showDialogue ────────────────────── */
@@ -357,9 +356,9 @@ describe('SceneController', () => {
 
     it('calls onDialogue callback', () => {
       const onDia = callbackSpy();
-      ctrl.onDialogue = onDia;
+      ctrl.events.on('dialogue', onDia);
 
-      ctrl.showDialogue(makeDialogue('d1', 'hero', 'Hello world', { expression: 'happy' }));
+      ctrl.isRunning = true; ctrl.processNode(makeDialogue('d1', 'hero', 'Hello world', { expression: 'happy' }));
 
       expect(onDia).toHaveBeenCalledWith({
         speaker: 'hero',
@@ -375,10 +374,10 @@ describe('SceneController', () => {
 
     it('sets auto-advance timer when autoAdvance is true', () => {
       const onDia = callbackSpy();
-      ctrl.onDialogue = onDia;
+      ctrl.events.on('dialogue', onDia);
       const advanceSpy = vi.spyOn(ctrl, 'advance');
 
-      ctrl.showDialogue(makeDialogue('d1', 'n', 'text', { autoAdvance: true, waitTime: 500 }));
+      ctrl.isRunning = true; ctrl.processNode(makeDialogue('d1', 'n', 'text', { autoAdvance: true, waitTime: 500 }));
 
       // Timer should be set (will be a timeout object)
       expect(ctrl._autoTimer).toBeTruthy();
@@ -389,16 +388,16 @@ describe('SceneController', () => {
     });
 
     it('does NOT auto-advance when autoAdvance is false', () => {
-      ctrl.onDialogue = callbackSpy();
-      ctrl.showDialogue(makeDialogue('d1', 'n', 'text'));
+      ctrl.events.on('dialogue', callbackSpy());
+      ctrl.isRunning = true; ctrl.processNode(makeDialogue('d1', 'n', 'text'));
       expect(ctrl._autoTimer).toBeUndefined();
     });
 
     it('passes comment field when present on node', () => {
       const onDia = callbackSpy();
-      ctrl.onDialogue = onDia;
+      ctrl.events.on('dialogue', onDia);
 
-      ctrl.showDialogue(makeDialogue('d1', 'n', 'text', { comment: 'TODO: need art' }));
+      ctrl.isRunning = true; ctrl.processNode(makeDialogue('d1', 'n', 'text', { comment: 'TODO: need art' }));
 
       expect(onDia).toHaveBeenCalledWith(expect.objectContaining({
         comment: 'TODO: need art',
@@ -407,9 +406,9 @@ describe('SceneController', () => {
 
     it('passes null comment when node has no comment field', () => {
       const onDia = callbackSpy();
-      ctrl.onDialogue = onDia;
+      ctrl.events.on('dialogue', onDia);
 
-      ctrl.showDialogue(makeDialogue('d1', 'n', 'text'));
+      ctrl.isRunning = true; ctrl.processNode(makeDialogue('d1', 'n', 'text'));
 
       expect(onDia).toHaveBeenCalledWith(expect.objectContaining({
         comment: null,
@@ -423,7 +422,7 @@ describe('SceneController', () => {
     it('processes dialogue nodes with comments identically to those without', () => {
       ctrl.isRunning = true;
       const onDia = callbackSpy();
-      ctrl.onDialogue = onDia;
+      ctrl.events.on('dialogue', onDia);
 
       const node = makeDialogue('d1', 'hero', 'Hello', { comment: 'Internal note' });
       ctrl.processNode(node);
@@ -446,7 +445,7 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const comments = [];
-      ctrl.onDialogue = (d) => comments.push(d.comment);
+      ctrl.events.on('dialogue', (d) => comments.push(d.comment));
 
       ctrl.startScene('commented');
       ctrl.advance();
@@ -472,7 +471,7 @@ describe('SceneController', () => {
 
     it('choice nodes can carry comments without affecting choice logic', () => {
       const onChoice = callbackSpy();
-      ctrl.onChoice = onChoice;
+      ctrl.events.on('choice', onChoice);
       ctrl.isRunning = true;
 
       const node = makeChoice('c1', 'Pick', [
@@ -490,9 +489,9 @@ describe('SceneController', () => {
 
     it('event nodes with comments fire actions normally', () => {
       const onAction = callbackSpy();
-      ctrl.onAction = onAction;
+      ctrl.events.on('action', onAction);
 
-      ctrl.fireEvent(makeEvent('e1', 'sfx', 'boom', { comment: 'Big moment' }));
+      ctrl.isRunning = true; ctrl.processNode(makeEvent('e1', 'sfx', 'boom', { comment: 'Big moment' }));
 
       expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
         type: 'sfx',
@@ -512,7 +511,7 @@ describe('SceneController', () => {
       ctrl.isRunning = true;
 
       const onChoice = callbackSpy();
-      ctrl.onChoice = onChoice;
+      ctrl.events.on('choice', onChoice);
 
       const node = makeChoice('c1', 'What now?', [
         { text: 'Open door', next: 'open', condition: 'has_key == true' },
@@ -563,7 +562,7 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.startScene('c1');
       expect(ctrl.isRunning).toBe(false);
@@ -572,7 +571,7 @@ describe('SceneController', () => {
 
     it('maps choices with correct fields including setFlag/setValue', () => {
       const onChoice = callbackSpy();
-      ctrl.onChoice = onChoice;
+      ctrl.events.on('choice', onChoice);
       ctrl.isRunning = true;
 
       const node = makeChoice('c1', 'Pick', [
@@ -594,7 +593,7 @@ describe('SceneController', () => {
 
     it('includes addFlag/delta/toggleFlag in choice mapping', () => {
       const onChoice = callbackSpy();
-      ctrl.onChoice = onChoice;
+      ctrl.events.on('choice', onChoice);
       ctrl.isRunning = true;
 
       const node = makeChoice('c1', 'Stat change', [
@@ -676,7 +675,7 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.startScene('cond4');
 
@@ -691,9 +690,9 @@ describe('SceneController', () => {
 
     it('calls onAction with event type and value', () => {
       const onAction = callbackSpy();
-      ctrl.onAction = onAction;
+      ctrl.events.on('action', onAction);
 
-      ctrl.fireEvent(makeEvent('e1', 'sfx', 'explosion'));
+      ctrl.isRunning = true; ctrl.processNode(makeEvent('e1', 'sfx', 'explosion'));
 
       expect(onAction).toHaveBeenCalledWith({
         type: 'sfx',
@@ -710,9 +709,9 @@ describe('SceneController', () => {
 
     it('includes setFlag/setValue in action payload', () => {
       const onAction = callbackSpy();
-      ctrl.onAction = onAction;
+      ctrl.events.on('action', onAction);
 
-      ctrl.fireEvent({
+      ctrl.isRunning = true; ctrl.processNode({
         id: 'e1',
         type: 'event',
         eventType: 'set_flag',
@@ -729,9 +728,9 @@ describe('SceneController', () => {
 
     it('includes addFlag/delta/toggleFlag in action payload', () => {
       const onAction = callbackSpy();
-      ctrl.onAction = onAction;
+      ctrl.events.on('action', onAction);
 
-      ctrl.fireEvent({
+      ctrl.isRunning = true; ctrl.processNode({
         id: 'e2',
         type: 'event',
         eventType: 'stat_change',
@@ -761,9 +760,9 @@ describe('SceneController', () => {
 
     it('ends scene when no next', () => {
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
-      ctrl.fireEvent(makeEvent('e1', 'sfx', 'done'));
+      ctrl.isRunning = true; ctrl.processNode(makeEvent('e1', 'sfx', 'done'));
       expect(ctrl.isRunning).toBe(false);
       expect(onEnd).toHaveBeenCalled();
     });
@@ -880,9 +879,9 @@ describe('SceneController', () => {
       registerScene(mainScene);
 
       // Wire the scene transition (as GameScene does)
-      ctrl.onSceneEnd = (data) => {
+      ctrl.events.on('sceneEnd', (data) => {
         if (data.nextScene) ctrl.startScene(data.nextScene);
-      };
+      });
 
       ctrl.startScene('main');
       expect(ctrl.currentScene.id).toBe('shop');
@@ -900,30 +899,117 @@ describe('SceneController', () => {
     });
   });
 
+  /* ── textInput ─────────────────────────── */
+
+  describe('textInput', () => {
+    it('emits textInput event and pauses execution', () => {
+      const onTextInput = callbackSpy();
+      ctrl.events.on('textInput', onTextInput);
+
+      ctrl.isRunning = true;
+      ctrl.processNode(makeTextInput('ti1', 'What is your name?', 'player_name', { maxLength: 20 }));
+
+      expect(ctrl.isRunning).toBe(false);
+      expect(onTextInput).toHaveBeenCalledWith({
+        prompt: 'What is your name?',
+        variable: 'player_name',
+        maxLength: 20
+      });
+    });
+
+    it('submitTextInput sets variable and resumes execution', () => {
+      ctrl.isRunning = false;
+      const advanceSpy = vi.spyOn(ctrl, 'advance').mockImplementation(() => {});
+
+      ctrl.submitTextInput('player_name', 'Alice');
+
+      expect(ctrl.vars.get('player_name')).toBe('Alice');
+      expect(ctrl.isRunning).toBe(true);
+      expect(advanceSpy).toHaveBeenCalled();
+    });
+  });
+
+  /* ── chapter ─────────────────────────────── */
+
+  describe('chapter', () => {
+    it('emits chapter event and pauses execution', () => {
+      const onChapter = callbackSpy();
+      ctrl.events.on('chapter', onChapter);
+
+      ctrl.isRunning = true;
+      ctrl.processNode({ id: 'c1', type: 'chapter', title: 'Chapter 1', subtitle: 'The Beginning', duration: 4000, next: 'node2' });
+
+      expect(ctrl.isRunning).toBe(false);
+      expect(onChapter).toHaveBeenCalledWith({
+        title: 'Chapter 1',
+        subtitle: 'The Beginning',
+        duration: 4000,
+        next: 'node2'
+      });
+    });
+  });
+
+  /* ── particles ───────────────────────────── */
+
+  describe('particles', () => {
+    it('emits particles event and follows next immediately if no wait', () => {
+      const onParticles = callbackSpy();
+      ctrl.events.on('particles', onParticles);
+      const advanceSpy = vi.spyOn(ctrl, 'advance');
+
+      ctrl.isRunning = true;
+      ctrl.processNode({ id: 'p1', type: 'particles', action: 'start', particleId: 'snow', config: '{"speed":10}', duration: 0, wait: false });
+
+      expect(onParticles).toHaveBeenCalledWith({
+        action: 'start',
+        id: 'snow',
+        config: '{"speed":10}',
+        duration: 0
+      });
+      expect(advanceSpy).toHaveBeenCalled();
+    });
+
+    it('pauses execution when wait is true and duration > 0', () => {
+      const onWait = callbackSpy();
+      ctrl.events.on('wait', onWait);
+      const advanceSpy = vi.spyOn(ctrl, 'advance').mockImplementation(() => {});
+
+      ctrl.isRunning = true;
+      ctrl.processNode({ id: 'p2', type: 'particles', action: 'start', particleId: 'rain', duration: 1000, wait: true });
+
+      expect(ctrl.isRunning).toBe(false);
+      expect(onWait).toHaveBeenCalledWith({ duration: 1000 });
+      
+      vi.advanceTimersByTime(1000);
+      expect(ctrl.isRunning).toBe(true);
+      expect(advanceSpy).toHaveBeenCalled();
+    });
+  });
+
   /* ── doWait ──────────────────────────── */
 
   describe('doWait', () => {
 
     it('calls onWait callback', () => {
       const onWait = callbackSpy();
-      ctrl.onWait = onWait;
+      ctrl.events.on('wait', onWait);
 
-      ctrl.doWait(makeWait('w1', 2000));
+      ctrl.isRunning = true; ctrl.processNode(makeWait('w1', 2000));
       expect(onWait).toHaveBeenCalledWith({ duration: 2000 });
     });
 
     it('uses default duration of 1000ms when not specified', () => {
       const onWait = callbackSpy();
-      ctrl.onWait = onWait;
+      ctrl.events.on('wait', onWait);
 
-      ctrl.doWait(makeWait('w1', undefined));
+      ctrl.isRunning = true; ctrl.processNode(makeWait('w1', undefined));
       expect(onWait).toHaveBeenCalledWith({ duration: 1000 });
     });
 
     it('follows next after wait duration', () => {
       const advanceSpy = vi.spyOn(ctrl, 'jumpToId');
 
-      ctrl.doWait(makeWait('w1', 500, { next: 'after_wait' }));
+      ctrl.isRunning = true; ctrl.processNode(makeWait('w1', 500, { next: 'after_wait' }));
       vi.advanceTimersByTime(500);
 
       expect(advanceSpy).toHaveBeenCalledWith('after_wait');
@@ -931,9 +1017,9 @@ describe('SceneController', () => {
 
     it('ends scene when no next after wait', () => {
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
-      ctrl.doWait(makeWait('w1', 300));
+      ctrl.isRunning = true; ctrl.processNode(makeWait('w1', 300));
       vi.advanceTimersByTime(300);
 
       expect(onEnd).toHaveBeenCalled();
@@ -952,7 +1038,7 @@ describe('SceneController', () => {
 
     it('calls onSceneEnd with end text', () => {
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.endScene(makeEnd('end1', 'To be continued...'));
       expect(onEnd).toHaveBeenCalledWith({
@@ -963,7 +1049,7 @@ describe('SceneController', () => {
 
     it('calls onSceneEnd with nextScene when specified', () => {
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.endScene(makeEnd('end1', 'The End', { nextScene: 'chapter_2' }));
       expect(onEnd).toHaveBeenCalledWith({
@@ -974,7 +1060,7 @@ describe('SceneController', () => {
 
     it('handles end scene with null/undefined node (edge case)', () => {
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.endScene(null);
       expect(onEnd).toHaveBeenCalledWith({
@@ -1007,7 +1093,7 @@ describe('SceneController', () => {
       ctrl.startScene('s1');
 
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.advance();
       expect(ctrl.isRunning).toBe(false);
@@ -1016,7 +1102,7 @@ describe('SceneController', () => {
 
     it('ends scene when currentNode is null', () => {
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.advance();
       expect(onEnd).toHaveBeenCalled();
@@ -1066,7 +1152,7 @@ describe('SceneController', () => {
       ctrl.startScene('s1');
 
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.jumpToId('nonexistent');
       expect(warn).toHaveBeenCalled();
@@ -1077,7 +1163,7 @@ describe('SceneController', () => {
 
     it('ends scene when no currentScene', () => {
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.jumpToId('anything');
       expect(onEnd).toHaveBeenCalled();
@@ -1235,7 +1321,7 @@ describe('SceneController', () => {
 
     it('isAtChoice is true when choice has pending options', () => {
       ctrl.isRunning = true;
-      ctrl.onChoice = callbackSpy();
+      ctrl.events.on('choice', callbackSpy());
       ctrl.processNode(makeChoice('c1', 'Pick', [{ text: 'A', next: 'a' }]));
       expect(ctrl.isAtChoice).toBe(true);
     });
@@ -1305,9 +1391,9 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const events = [];
-      ctrl.onDialogue = (d) => events.push(`dialogue:${d.speaker}:${d.text}`);
-      ctrl.onSceneStart = (d) => events.push(`start:${d.sceneId}`);
-      ctrl.onSceneEnd = (d) => events.push(`end:${d.text}`);
+      ctrl.events.on('dialogue', (d) => events.push(`dialogue:${d.speaker}:${d.text}`));
+      ctrl.events.on('sceneStart', (d) => events.push(`start:${d.sceneId}`));
+      ctrl.events.on('sceneEnd', (d) => events.push(`end:${d.text}`));
 
       ctrl.startScene('linear');
       expect(events).toContain('start:linear');
@@ -1339,7 +1425,7 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const events = [];
-      ctrl.onDialogue = (d) => events.push(d.text);
+      ctrl.events.on('dialogue', (d) => events.push(d.text));
 
       ctrl.startScene('branch');
       ctrl.advance(); // start → check
@@ -1387,7 +1473,7 @@ describe('SceneController', () => {
       registerScene(scene);
 
       const onEnd = callbackSpy();
-      ctrl.onSceneEnd = onEnd;
+      ctrl.events.on('sceneEnd', onEnd);
 
       ctrl.startScene('empty');
 

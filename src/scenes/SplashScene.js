@@ -33,8 +33,8 @@ export class SplashScene extends Phaser.Scene {
 
     // Logo
     let logoImg = null;
-    if (config.logo && this.textures.exists(`bg_${config.logo}`)) {
-      logoImg = this.add.image(W/2, H/2, `bg_${config.logo}`);
+    if (config.logo && this.textures.exists(config.logo)) {
+      logoImg = this.add.image(W/2, H/2, config.logo);
       logoImg.setScale(config.logoScale || 1.0);
       logoImg.setAlpha(0);
     } else {

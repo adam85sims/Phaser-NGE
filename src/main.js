@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import './nodes/CoreNodes.js';
+import './nodes/RuntimeNodes.js';
 import { BootScene } from './scenes/BootScene.js';
 import { SplashScene } from './scenes/SplashScene.js';
 import { MenuScene } from './scenes/MenuScene.js';
@@ -20,6 +20,9 @@ async function initGame() {
       scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
+      },
+      dom: {
+        createContainer: true
       },
       scene: [BootScene, SplashScene, MenuScene, GameScene]
     };

@@ -45,51 +45,27 @@ export class BootScene extends Phaser.Scene {
         safeFetchJson(`/data/theme.json?t=${t}`).catch(() => ({})) // theme is optional
       ]);
 
-      // Step 2: Fetch all scenes listed in game.json
-      const sceneIds = game.scenes || [];
+      // Helper to fetch an array of JSON files mapped by ID
       const t2 = Date.now();
-      const sceneFetches = sceneIds.map(id =>
-        fetch(`/data/scenes/${id}.json?t=${t2}`)
-          .then(async r => {
-            if (!r.ok) return null;
-            const text = await r.text();
-            if (text.trim().startsWith('<')) return null;
-            try { return JSON.parse(text); } catch (e) { return null; }
-          })
-          .then(data => ({ id, data }))
-      );
+      const fetchCollection = async (dir, ids) => {
+        const fetches = ids.map(id =>
+          fetch(`/data/${dir}/${id}.json?t=${t2}`)
+            .then(async r => {
+              if (!r.ok) return null;
+              const text = await r.text();
+              if (text.trim().startsWith('<')) return null;
+              try { return JSON.parse(text); } catch (e) { return null; }
+            })
+            .then(data => ({ id, data }))
+        );
+        return Promise.all(fetches);
+      };
 
-      const sceneResults = await Promise.all(sceneFetches);
-
-      // Step 3: Fetch all animations listed in game.animations
-      const animIds = game.animations || [];
-      const animFetches = animIds.map(id =>
-        fetch(`/data/animations/${id}.json?t=${t2}`)
-          .then(async r => {
-            if (!r.ok) return null;
-            const text = await r.text();
-            if (text.trim().startsWith('<')) return null;
-            try { return JSON.parse(text); } catch (e) { return null; }
-          })
-          .then(data => ({ id, data }))
-      );
-
-      const animResults = await Promise.all(animFetches);
-
-      // Step 4: Fetch all layouts listed in game.layouts
-      const layoutIds = game.layouts || [];
-      const layoutFetches = layoutIds.map(id =>
-        fetch(`/data/layouts/${id}.json?t=${Date.now()}`)
-          .then(async r => {
-            if (!r.ok) return null;
-            const text = await r.text();
-            if (text.trim().startsWith('<')) return null;
-            try { return JSON.parse(text); } catch (e) { return null; }
-          })
-          .then(data => ({ id, data }))
-      );
-
-      const layoutResults = await Promise.all(layoutFetches);
+      const [sceneResults, animResults, layoutResults] = await Promise.all([
+        fetchCollection('scenes', game.scenes || []),
+        fetchCollection('animations', game.animations || []),
+        fetchCollection('layouts', game.layouts || [])
+      ]);
 
       // Populate Data store
       Data.game = game;
