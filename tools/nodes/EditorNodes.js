@@ -612,6 +612,7 @@ Registry.extendNodeType('end', {
         <option value="white_fade"${node.transition==='white_fade'?' selected':''}>Fade to White</option>
         <option value="slide_left"${node.transition==='slide_left'?' selected':''}>Slide Left</option>
         <option value="slide_right"${node.transition==='slide_right'?' selected':''}>Slide Right</option>
+        <option value="none"${node.transition==='none'?' selected':''}>None</option>
       </select></div>
       <div class="form-group"><label>Duration</label><input type="number" value="${node.transitionDuration||600}" data-field="transitionDuration" data-type="number"/></div>
     </div>

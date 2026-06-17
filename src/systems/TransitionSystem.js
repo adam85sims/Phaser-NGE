@@ -7,6 +7,12 @@ export class TransitionSystem {
    * - color: hex for fade
    */
   static runTransition(scene, type, duration, onComplete, onMidpoint) {
+    if (type === 'none') {
+      if (onMidpoint) onMidpoint();
+      if (onComplete) onComplete();
+      return;
+    }
+
     if (!type || type === 'fade') {
       this._fadeTransition(scene, duration, 0x000000, onComplete, onMidpoint);
       return;

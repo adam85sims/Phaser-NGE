@@ -210,7 +210,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   _sceneTransition(targetScene) {
-    TransitionSystem.runTransition(this, 'fade', 600, () => {
+    TransitionSystem.runTransition(this, 'none', 0, () => {
       this.scene.start(targetScene);
     });
   }
@@ -220,7 +220,7 @@ export class MenuScene extends Phaser.Scene {
       const slots = JSON.parse(localStorage.getItem('narrative_saves') || '[]');
       const autoSave = slots[9];
       if (autoSave && autoSave.sceneId) {
-        TransitionSystem.runTransition(this, 'fade', 600, () => {
+        TransitionSystem.runTransition(this, 'none', 0, () => {
           this.scene.start('GameScene', { loadScene: autoSave.sceneId, variables: autoSave.variables });
         });
       } else {

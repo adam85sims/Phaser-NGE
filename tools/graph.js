@@ -62,13 +62,31 @@ export function mountGraph(container) {
   requestAnimationFrame(renderLoop);
 
   // Reset camera when scene changes
-  window.addEventListener('scene:changed', () => {
-    if (graphState) {
-      graphState.camera.x = -300;
-      graphState.camera.y = 0;
-      graphState.zoom = 1;
-    }
-  });
+  if (!window.__graphSceneChangedListener) {
+    window.__graphSceneChangedListener = () => {
+      if (graphState) {
+        graphState.zoom = 1;
+        const scene = editorState.scenes[editorState.activeSceneId];
+        const nodes = scene?.nodes || [];
+        if (nodes.length > 0) {
+          const last = nodes[nodes.length - 1];
+          // Offset x by -150 so the node appears towards the left-center, leaving room on the right
+          graphState.camera.x = -last.x - 150;
+          graphState.camera.y = -last.y;
+        } else {
+          graphState.camera.x = -300;
+          graphState.camera.y = 0;
+        }
+      }
+    };
+    window.addEventListener('scene:changed', window.__graphSceneChangedListener);
+  }
+  
+  // Call it immediately if this is the first mount for the current scene
+  if (graphState._lastCenteredSceneId !== editorState.activeSceneId) {
+    graphState._lastCenteredSceneId = editorState.activeSceneId;
+    window.__graphSceneChangedListener();
+  }
 
   // ── Context menu ──
   canvas.addEventListener('contextmenu', (e) => {

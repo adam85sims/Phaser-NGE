@@ -54,9 +54,6 @@ export class GameScene extends Phaser.Scene {
     // ── Input ──
     this._setupInput();
 
-    // ── Fade in ──
-    this.cameras.main.fadeIn(500, 0, 0, 0);
-
     // ── Start the game ──
     this._pendingEndText = null;
     const startScene = initData.loadScene || this._getStartScene();
@@ -119,7 +116,6 @@ export class GameScene extends Phaser.Scene {
 
     ctrl.events.on('sceneStart', (data) => {
       this.layers.loadSceneLayers(data.layers, data.background);
-      this.cameras.main.fadeIn(400, 0, 0, 0);
       if (data.music) this.audio.playBGM(data.music);
 
       // Apply layout if the scene specifies one

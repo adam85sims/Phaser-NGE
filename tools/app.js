@@ -64,6 +64,7 @@ async function boot() {
   const btnRedo = document.getElementById('btn-redo');
   const btnSettings = document.getElementById('btn-settings');
   const btnExport = document.getElementById('btn-export');
+  const btnExportExe = document.getElementById('btn-export-exe');
   const settingsModal = document.getElementById('settings-modal');
 
   btnExport?.addEventListener('click', async () => {
@@ -80,10 +81,25 @@ async function boot() {
     }
   });
 
+  btnExportExe?.addEventListener('click', async () => {
+    try {
+      await forceSave();
+      const result = await window.electron.exportExeBuild();
+      if (result && result.success) {
+        alert('Windows EXE exported successfully to:\n' + result.path);
+      } else if (result && result.error) {
+        alert('Export failed:\n' + result.error);
+      }
+    } catch (err) {
+      alert('Error during export:\n' + err.message);
+    }
+  });
+
   btnSettings?.addEventListener('click', () => {
     if (settingsModal) {
       // Populate fields
       document.getElementById('setting-project-name').value = editorState.gameConfig?.title || '';
+      document.getElementById('setting-project-icon').value = editorState.gameConfig?.icon || '';
       document.getElementById('setting-viewport-w').value = editorState.gameConfig?.width || 1280;
       document.getElementById('setting-viewport-h').value = editorState.gameConfig?.height || 720;
       document.getElementById('setting-text-speed').value = editorState.gameConfig?.defaults?.textSpeed || 40;
@@ -105,6 +121,7 @@ async function boot() {
     if (!editorState.gameConfig.defaults) editorState.gameConfig.defaults = {};
 
     editorState.gameConfig.title = document.getElementById('setting-project-name').value;
+    editorState.gameConfig.icon = document.getElementById('setting-project-icon').value;
     editorState.gameConfig.width = parseInt(document.getElementById('setting-viewport-w').value) || 1280;
     editorState.gameConfig.height = parseInt(document.getElementById('setting-viewport-h').value) || 720;
     editorState.gameConfig.defaults.textSpeed = parseInt(document.getElementById('setting-text-speed').value) || 40;
