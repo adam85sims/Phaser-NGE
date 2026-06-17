@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           id: "start",
           entryNode: "n1",
           nodes: [
-            { id: "n1", type: "dialogue", speaker: "narrator", text: "Welcome to your new game!", next: null }
+            { id: "n1", type: "dialogue", speaker: "narrator", text: "Welcome to your new game!", x: 400, y: 300, next: null }
           ]
         }
       },

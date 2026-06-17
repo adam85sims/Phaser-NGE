@@ -1,8 +1,9 @@
-**Current Goal:** Phase 3 & 4 Feature Expansion
-Status: In-progress
+# Session State (June 17, 2026)
+
+**Current Goal:** Fix missing node coordinates in new project template
+Status: Complete
 Completed:
-- Voice Acting (quick fade out, settings integration)
-- CG Gallery (auto-compilation, global persistence, dynamic grid)
+- Added x/y coordinates to the default "n1" node in `launcher.js` so it renders visibly in the dialogue editor.
 
 Next Steps (from Audit):
 1. Inventory system — key items, collectibles, conditions on items
