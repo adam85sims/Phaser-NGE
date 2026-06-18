@@ -3,7 +3,7 @@ import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { startServer, stopServer, setProjectRoot, getProjectRoot } from './server.js';
-import rcedit from 'rcedit';
+import { rcedit } from 'rcedit';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
