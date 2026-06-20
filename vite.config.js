@@ -10,7 +10,7 @@ const isElectronDev = process.env.VITE_ELECTRON === 'true';
 export default defineConfig({
   plugins: isElectronDev ? [] : [editorBackend()],
   server: {
-    port: 3000,
+    port: process.env.PORT ? parseInt(process.env.PORT) : 3000,
     strictPort: true,
     fs: {
       strict: false

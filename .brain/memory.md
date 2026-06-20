@@ -56,3 +56,5 @@
 - *Decision:* Implemented \GlobalSaveSystem\ capabilities in \SaveSystem.js\ to track persistent data like unlocked CGs (and eventually achievements) via the \
 arrative_globals\ localStorage key.
 - *Gotcha:* The CG Gallery UI needs to know the total number of gallery images to display locked \?\ placeholders, but we have no backend at runtime. *Fix:* Intercepted the \/api/save\ request in the editor backend to automatically scan \public/assets/gallery/\ and compile a master list into \game.gallery\ upon save.
+
+- *Decision:* Blocked browser history navigation (back/forward mouse buttons) inside the editor V2 SPA to prevent accidental exits. Used a combination of `mousedown` preventDefault (for buttons 3 and 4) and a dummy history pushState/popstate trap.

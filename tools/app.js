@@ -173,6 +173,19 @@ async function boot() {
     }
   });
 
+  // Prevent accidental back navigation from side mouse buttons
+  window.addEventListener('mousedown', (e) => {
+    if (e.button === 3 || e.button === 4) {
+      e.preventDefault();
+    }
+  });
+
+  // Trap history to prevent actual browser navigation if back is triggered
+  history.pushState(null, document.title, location.href);
+  window.addEventListener('popstate', () => {
+    history.pushState(null, document.title, location.href);
+  });
+
   // Listen for background changes from asset apply
   window.addEventListener('scene:background-changed', () => {
     renderScenePreview();

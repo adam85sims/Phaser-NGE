@@ -249,8 +249,9 @@ async function createWindow() {
     ? `http://127.0.0.1:${serverPort}/`
     : `http://127.0.0.1:${serverPort}/`; // In production standalone, we want to load the game directly
 
+  const devPort = process.env.PORT || 3000;
   const launcherUrl = isDev 
-    ? 'http://localhost:3000/launcher/'
+    ? `http://localhost:${devPort}/launcher/`
     : `http://127.0.0.1:${serverPort}/launcher/`;
 
   mainWindow.loadURL(process.env.STANDALONE_MODE === 'true' ? standaloneUrl : launcherUrl);
