@@ -167,6 +167,7 @@ function _renderList(container, context) {
 }
 
 let _selectedKeyframe = null; // { track: 'x', index: 1 }
+let _draggingKeyframe = null; // { track, index, startX, startTime }
 
 function _renderProps(container, context) {
   const header = container.querySelector('#anim-props-header');
@@ -365,7 +366,18 @@ function _renderTimeline(container, context) {
       
       kfEl.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (_draggingKeyframe) return; // Don't select while dragging
         _selectedKeyframe = { track, index: idx };
+        _renderTimeline(container, context);
+        _renderProps(container, context);
+      });
+      
+      // Drag to reposition keyframe
+      kfEl.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        _selectedKeyframe = { track, index: idx };
+        _draggingKeyframe = { track, index: idx, startX: e.clientX, startTime: kf.time, anim };
         _renderTimeline(container, context);
         _renderProps(container, context);
       });
@@ -411,6 +423,38 @@ function _renderTimeline(container, context) {
       rulerEl.appendChild(label);
     }
   }
+
+  // Keyframe drag handlers (global, cleaned up on re-render)
+  if (window._kfDragMove) document.removeEventListener('mousemove', window._kfDragMove);
+  if (window._kfDragUp) document.removeEventListener('mouseup', window._kfDragUp);
+  
+  window._kfDragMove = (e) => {
+    if (!_draggingKeyframe) return;
+    const trackEl = tBody.querySelector(`.timeline-track[data-track="${_draggingKeyframe.track}"]`);
+    if (!trackEl) return;
+    
+    const rect = trackEl.getBoundingClientRect();
+    const dx = e.clientX - _draggingKeyframe.startX;
+    const dt = (dx / rect.width) * _draggingKeyframe.anim.duration;
+    let newTime = Math.round((_draggingKeyframe.startTime + dt) / 10) * 10;
+    newTime = Math.max(0, Math.min(_draggingKeyframe.anim.duration, newTime));
+    
+    const kf = _draggingKeyframe.anim.tracks[_draggingKeyframe.track][_draggingKeyframe.index];
+    if (kf && kf.time !== newTime) {
+      kf.time = newTime;
+      markDirty();
+      _renderTimeline(container, context);
+    }
+  };
+  
+  window._kfDragUp = () => {
+    if (_draggingKeyframe) {
+      _draggingKeyframe = null;
+    }
+  };
+  
+  document.addEventListener('mousemove', window._kfDragMove);
+  document.addEventListener('mouseup', window._kfDragUp);
 
   // Playback Logic
   const btnPlay = container.querySelector('#btn-play-anim');

@@ -9,7 +9,7 @@ The agent owns the full project — engine, data, tools, assets — and edits fr
 ```bash
 npm install                    # one-time
 npm run dev                    # Vite dev server on http://localhost:3000
-npm test                       # Vitest + jsdom, ~190 unit tests in ~1.5s (pure logic only)
+npm test                       # Vitest + jsdom, 257 unit tests in ~1.2s (pure logic only)
 npm run test:watch             # Vitest watch mode
 npm run build                  # Production bundle to dist/
 npm run import-asset -- <type> <file>
@@ -43,14 +43,16 @@ Phaser-NGE/
 │   │   ├── DataLoader.js       # Global Data store ({game, characters, variables, theme, scenes, animations})
 │   │   ├── Registry.js         # Node type plugin registry (editor + runtime share)
 │   │   ├── SceneController.js  # Graph-based narrative state machine
-│   │   ├── DialogueSystem.js   # Typewriter, choices, inline tags, history, skip/auto
+│   │   ├── DialogueSystem.js   # Typewriter, choices, rich text, localization, history, skip/auto
 │   │   ├── CharacterSystem.js  # Portrait display, expressions, positioning
 │   │   ├── LayerSystem.js      # Multi-layer scene composition (backgrounds, sprites, containers)
 │   │   ├── AnimationRunner.js  # Keyframe animation runner (JSON tracks → Phaser tweens)
-│   │   ├── VariableSystem.js   # Scoped flags, counters, condition eval (AND/OR/parens)
+│   │   ├── RichTextHelper.js   # Rich text parser (BBCode, conditionals, control tags)
+│   │   ├── VariableSystem.js   # Scoped flags, counters, arrays, condition eval (AND/OR/parens/contains)
 │   │   ├── SaveSystem.js       # localStorage save/load + quick/auto save
 │   │   ├── AudioSystem.js      # BGM/SFX with crossfade
-│   │   └── SettingsSystem.js   # Persistent settings (text speed, volume, fullscreen)
+│   │   ├── SettingsSystem.js   # Persistent settings (text speed, volume, fullscreen, language)
+│   │   └── TransitionSystem.js # 15 transition types (fade, wipe, crossfade, iris, zoom, pixelate)
 │   └── nodes/
 │       └── CoreNodes.js        # Registers all built-in node types via Registry
 │
@@ -80,25 +82,28 @@ Phaser-NGE/
 ├── skills/                     # Per-module reference (load before editing)
 │   ├── overview/
 │   ├── scene-controller/       #   — graph state machine
-│   ├── dialogue-system/        #   — typewriter / choices / inline tags
+│   ├── dialogue-system/        #   — typewriter / choices / rich text / localization
+│   ├── rich-text-helper/       #   — tag parser (BBCode, conditionals, control tags)
+│   ├── transition-system/      #   — 15 transition types
 │   ├── character-system/       #   — portraits / expressions
-│   ├── variable-system/        #   — flags / conditions
+│   ├── variable-system/        #   — flags / arrays / conditions / contains
 │   ├── save-system/            #   — localStorage persistence
 │   ├── audio-system/           #   — BGM / SFX
 │   ├── data-loader/            #   — Data store / fetch
-│   ├── boot-scene/             #   — data loading scene
+│   ├── boot-scene/             #   — data loading + font preload
 │   ├── game-scene/             #   — main loop / wiring
 │   └── editor-app/             #   — editor app shell
 │
 ├── public/assets/              # Media (served at /assets/*)
 │   ├── backgrounds/            # PNG/JPG, key = filename stem (no ext) or full path
 │   ├── characters/             # Portrait images
+│   ├── fonts/                  # Custom fonts (TTF/OTF/WOFF2) loaded by BootScene
 │   └── audio/{bgm,sfx}/        # bg_<key> / audio/<subdir>/<key>.<ext>
 │
 ├── tests/                      # Vitest (jsdom) — pure logic only
 │   ├── vitest.config.js
 │   ├── setup.js
-│   └── systems/{DataLoader,VariableSystem,SceneController,SaveSystem,SettingsSystem}.test.js
+│   └── systems/{DataLoader,VariableSystem,SceneController,SaveSystem,SettingsSystem,RichTextHelper,TransitionSystem}.test.js
 │
 ├── docs/                       # Long-form design docs
 │   ├── qa-checklist.md         # Manual QA test plan (Phaser-dependent systems)
@@ -131,11 +136,17 @@ Each module in `skills/` has a `SKILL.md` with the module's API, architecture, g
   "startScene": "start",
   "scenes": ["start"],
   "animations": ["intro"],
-  "defaults": { "textSpeed": 40, "autoAdvance": false, "bgmVolume": 0.7, "sfxVolume": 1 }
+  "defaults": { "textSpeed": 40, "autoAdvance": false, "bgmVolume": 0.7, "sfxVolume": 1 },
+  "localization": {
+    "defaultLanguage": "en",
+    "availableLanguages": ["en"],
+    "languageNames": { "en": "English" }
+  }
 }
 ```
 - `startScene` is used by `GameScene._getStartScene()` if `MenuScene` doesn't pass `loadScene` via scene data.
 - `animations[]` lists animation IDs; their JSON lives in `data/animations/<id>.json`.
+- `localization` (optional) — enables multi-language support. If absent or `availableLanguages` has 1 entry, language picker is hidden.
 
 ### Scene File (`data/scenes/<id>.json`)
 ```json
@@ -170,7 +181,7 @@ The set of node types is **not hardcoded** in the engine — both editor and run
 | `random_branch` | indigo | `choices[]` (each with `weight`, `next`) | Weighted random pick of one branch. |
 | `condition` | green | `condition`, `next` (true), `else` (false) | Auto branch on variable. |
 | `event` | violet | `eventType`, `eventValue`, `eventVolume`, `eventTarget`, `next` | Fire-and-forget side effect (see Event Types). |
-| `set_variable` | emerald | `variable`, `value`, `operation` (`set`/`add`/`toggle`), `next` | Mutate a variable. |
+| `set_variable` | emerald | `variable`, `value`, `operation` (`set`/`add`/`toggle`/`append`/`remove`/`clear`), `next` | Mutate a variable. Array ops: `append`, `remove`, `clear`. |
 | `wait` | slate | `duration`, `next` | Timed pause (ms). |
 | `animate` | sky | `target`, `property`, `value`, `duration`, `easing`, `wait`, `next` | Tween a target's `x`/`y`/`alpha`/`scale`/`angle`/`zoom`. `target: 'camera'` addresses the camera. |
 | `show_object` | teal | `target`, `duration`, `wait`, `next` | Fade a layer/character in. |
@@ -200,8 +211,10 @@ All nodes may carry: `setFlag`, `setValue` (variable writes), `background` (mid-
 courage >= 50 AND has_key == true
 courage >= 100 OR is_hero == true
 (a == 1 OR b == 1) AND c == 1
+inventory contains sword
+inventory not_contains shield
 ```
-AND has higher precedence than OR. Parens override. Values: booleans, numbers, or quoted strings. Operators: `==`, `!=`, `>=`, `<=`, `>`, `<`, `=`.
+AND has higher precedence than OR. Parens override. Values: booleans, numbers, or quoted strings. Operators: `==`, `!=`, `>=`, `<=`, `>`, `<`, `=`, `contains`, `not_contains`.
 
 ### Backgrounds & Layers
 - A scene can have either a legacy single `background` field OR a structured `layers[]` array. `LayerSystem` auto-migrates legacy `background` into a single layer if `layers[]` is empty.
@@ -210,16 +223,18 @@ AND has higher precedence than OR. Parens override. Values: booleans, numbers, o
 
 ### Inline Dialogue Tags
 
-Dialogue text supports inline scripting tags that trigger visual events as the typewriter reaches them. See `docs/inline-scripting.md`.
+Dialogue text supports rich formatting, inline scripting tags, control tags, conditional text, and player name substitution. See `docs/inline-scripting.md` and `skills/rich-text-helper/SKILL.md`.
 
 ```
-Here is the ancient relic you asked for. [show:ancient_relic] [anim:ancient_relic:pulse]
+[b]bold[/b] [i]italic[/i] [color=#ff0000]red[/color]
+[size=24]big text[/size] [font=serif]fancy[/font] [wave]wavy[/wave] [shake]shaking[/shake]
+[speed=80]slow typing[/speed] [delay=500]pause[/delay]
+[playername] — inserts player_name variable or "Adventurer"
+[show:ancient_relic] [anim:ancient_relic:pulse]
+{if inventory contains sword}You draw your blade.{/if}
 ```
-- `[show:assetname]` — fades the named layer/asset in (lookup by asset name, not layer id).
-- `[hide:assetname]` — fades it out.
-- `[anim:target:animation_key]` — runs a keyframe animation (from `data/animations/<id>.json`) on the target.
 
-Tags are stripped from the displayed text. If the player skips the typewriter, pending tags fire instantly.
+Tags are stripped from displayed text. Control tags `[speed]`/`[delay]` modify typewriter behavior. Conditional text `{if...}` is resolved at display time using current variable state.
 
 ### Animations (`data/animations/<id>.json`)
 
@@ -242,10 +257,14 @@ Tags are stripped from the displayed text. If the player skips the typewriter, p
 
 ```json
 {
+  "fonts": {
+    "primary": { "file": "NotoSans.ttf", "weight": 400 },
+    "secondary": { "file": "NotoSerif.ttf", "weight": 400 }
+  },
   "dialogue": {
     "textBoxSize": { "width": 1180, "height": 180 },
     "textBoxPosition": { "x": 50, "y": 520 },
-    "textSpeed": 40, "fontSize": 28, "fontFamily": "monospace",
+    "textSpeed": 40, "fontSize": 28, "fontFamily": "primary",
     "textColor": "#ffffff", "backgroundColor": "#22224488",
     "padding": { "x": 30, "y": 20 }, "transitionDuration": 300
   },
@@ -256,6 +275,8 @@ Tags are stripped from the displayed text. If the player skips the typewriter, p
   }
 }
 ```
+
+- `fonts` (optional) — custom fonts loaded by BootScene via `@font-face`. Key is the font name, `file` is the filename in `public/assets/fonts/`. Use the font name in `dialogue.fontFamily` or `[font=name]` inline tags.
 
 ## Hotkeys (in-game)
 
@@ -358,6 +379,7 @@ Asset keys can be:
 - `BootScene.create()` is `async`. It uses `fetch()` with **absolute paths** (`/data/...`, `/assets/...`) — Phaser's built-in `this.load.json` has Vite path-resolution issues, do NOT use it.
 - `safeFetchJson()` rejects any response that starts with `<` (HTML fallback page), preventing 404 → parse errors.
 - All scenes listed in `game.scenes[]` are fetched in parallel, plus all `game.animations[]` from `data/animations/`.
+- **Custom fonts** are loaded from `theme.fonts` config via `@font-face` injection. `document.fonts.ready` is awaited after all font loads attempt.
 - Images are prefetched as blobs → `Image` → cached under their full asset key (NOT prefixed `bg_` — that's only for theme splash/menu backgrounds). Missing images log a warning and continue.
 - Audio is preloaded via `this.load.audio(key, url)` (so Phaser's `cache.audio.exists()` works at runtime), then `load.start()` is awaited. Missing audio logs once via `AudioSystem._warnedKeys` (no spam).
 - `nge_debug_start` localStorage key is checked at end of boot — if set, `GameScene` is started directly at that node (used by the editor's "play from here" feature).
@@ -390,10 +412,10 @@ Asset keys can be:
 
 ### VariableSystem
 - Scoped variables: `scopes[]` with index 0 = global. `pushScope(initialVars)` for `macro`/`call_scene` args, `popScope()` on return. `get()` searches top-to-bottom; `set()` writes to the scope that first defines the name (or top scope if undefined).
-- Compiles conditions once per call into a small expression tree; supports AND/OR with parens.
-- Values typed as boolean / number / string. JSON `null` becomes `null` (treats as falsy in `==`/`!=`).
-- `applyAction(node)` handles `setFlag`+`setValue`, `toggleFlag`, and `addFlag`+`delta`.
-- `serialize()` returns only the global scope; `deserialize(data)` replaces `scopes[0]`.
+- Compiles conditions once per call into a small expression tree; supports AND/OR with parens and `contains`/`not_contains` for arrays.
+- Values typed as boolean / number / string / array. JSON `null` becomes `null` (treats as falsy in `==`/`!=`).
+- `applyAction(node)` handles `setFlag`+`setValue`, `toggleFlag`, `addFlag`+`delta`, `arrayAppend`, `arrayRemove`, `arrayClear`.
+- `serialize()` returns only the global scope (arrays are deep-copied); `deserialize(data)` replaces `scopes[0]`.
 
 ### SaveSystem
 - localStorage key `narrative_saves` (a JSON array). Slot 0 = quick save, slot 9 = auto-save (written on every `onSceneStart`).
@@ -402,8 +424,14 @@ Asset keys can be:
 - `MenuScene._loadAutoSave()` reads `slots[9]` and starts `GameScene` with `{ loadScene, variables }`.
 
 ### SettingsSystem
-- localStorage key `narrative_settings`. `textSpeed` (10–200ms, default 40), `bgmVolume`, `sfxVolume` (0–1), `fullscreen`.
+- localStorage key `narrative_settings`. `textSpeed` (10–200ms, default 40), `bgmVolume`, `sfxVolume` (0–1), `fullscreen`, `language` (default 'en').
 - `clamp(v, min, max)` helper. `save()` is called from `MenuScene`'s settings panel on every inc/dec click.
+
+### TransitionSystem
+- Static class with 15 transition types: fade, white_fade, slide_left/right, wipe_left/right/up/down, crossfade, iris_in/out, zoom_in/out, pixelate.
+- `runTransition(scene, type, duration, onComplete, onMidpoint)` — `onMidpoint` is when the scene swap happens.
+- Scene JSON can configure `transitions.enter` and `transitions.exit` per-scene.
+- `getAvailableTypes()` returns `[{ id, label }]` for UI dropdowns.
 
 ### AudioSystem
 - BGM crossfades via tweens: fades out old channel, fades in new channel simultaneously over `fadeDuration` ms (default 800ms). Same-track restart is skipped.
@@ -413,15 +441,19 @@ Asset keys can be:
 
 ### DialogueSystem
 - Built once per `GameScene.create()` from theme config. Container at `depth=100` (above characters at `depth=50` and layers at `depth=0`).
-- Typewriter: each char added after `textSpeed` ms. Inline tags parsed by regex `\[(show|hide|anim):([^\]]+)\]` and fired when the typewriter hits their `index` offset.
-- `[anim:target:key]` resolves target via `layers.layers.get(targetId).image` first, then `characters.activeSprites.get(targetId)`. Note: `LayerSystem.layers` is a plain object (not a Map) — there's a known bug here; if anim tags fail, check whether your code uses `.get()` on it. **Update: this was fixed — uses bracket access `layers?.[tag.target]` and `portraits?.[tag.target]` now.**
+- Typewriter: each char added after `textSpeed` ms. Inline tags parsed by regex and fired when the typewriter hits their `index` offset.
+- Rich text: `[b/i/color/size/font/wave/shake]` produce HTML spans. Control tags `[speed=X]` change typewriter speed; `[delay=X]` pauses typewriter.
+- Conditional text: `{if condition}text{/if}` resolved at parse time via `VariableSystem.evaluate()`.
+- `[playername]` token resolved at render time to `player_name` variable or "Adventurer" fallback.
+- Localization: `resolveText(text, Settings.language)` handles plain strings (backwards compatible) and language objects `{ "en": "Hello", "ja": "こんにちは" }`.
+- CSS animations: `.nge-wave` and `.nge-shake` injected once via `_injectStyles()`.
 - Skip-to-end (`advance()` while typing) immediately fires all pending tags, sets full text, shows the continue arrow.
-- History: `history = []`, pushed on `showDialogue()`. `H` toggles `showHistory()` (implementation in `DialogueSystem`).
-- Skip/auto modes: `setSkipMode(bool)`, `setAutoMode(bool)`, `toggleSkip()`, `toggleAuto()`. Auto-advance fires the dialogue callback after 2s.
+- History: `history = []`, pushed on `showDialogue()`. `H` toggles `showHistory()`.
+- Skip/auto modes: `setSkipMode(bool)`, `setAutoMode(bool)`, `toggleSkip()`, `toggleAuto()`. Auto-advance fires after 1.5s–4s (text-length dependent).
 
 ## Testing
 
-- `npm test` — Vitest with jsdom. **Only pure-logic systems are covered:** DataLoader, VariableSystem, SceneController, SaveSystem, SettingsSystem, TransitionSystem.
+- `npm test` — Vitest with jsdom. **Only pure-logic systems are covered:** DataLoader, VariableSystem, SceneController, SaveSystem, SettingsSystem, TransitionSystem, RichTextHelper (257 tests, ~1.2s).
 - Phaser-dependent systems (DialogueSystem, CharacterSystem, LayerSystem, AudioSystem, AnimationRunner) are tested via the manual `docs/qa-checklist.md`.
 - `tests/setup.js` polyfills `localStorage` (jsdom already provides it) and silences `console.warn`/`console.error` per-test, exposing `getWarnings()` / `getErrors()` helpers.
 - Test reporter is `verbose` locally, `default` in CI (`process.env.CI`).

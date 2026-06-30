@@ -23,6 +23,23 @@ export class CharacterSystem {
     const charData = Data.getCharacter(characterId);
     if (!charData || charData.invisible) return;
 
+    // Resolve expression → portrait texture key
+    let texKey = null;
+    const expr = expression || 'neutral';
+    if (charData.portraits) {
+      texKey = charData.portraits[expr]
+            || charData.portraits.neutral
+            || Object.values(charData.portraits)[0];
+    }
+    if (!texKey) {
+      console.warn(`[CharacterSystem] No portrait for ${characterId}/${expr}`);
+      return;
+    }
+    if (!this.scene.textures.exists(texKey)) {
+      console.warn(`[CharacterSystem] Texture '${texKey}' not loaded for ${characterId}`);
+      return;
+    }
+
     const x = this._getPositionX(position || 'center');
     const scale = charData.scale ?? Data.theme?.portraits?.scale ?? 1;
     const baseY = Data.theme?.portraits?.baseY ?? 0.5;

@@ -3,6 +3,7 @@ import { HierarchyPanel } from './components/HierarchyPanel';
 import { Canvas } from './components/Canvas';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import AssetPanel from './components/AssetPanel';
+import ExportPreviewDialog from './components/ExportPreviewDialog';
 import { useLayoutStore } from './store/useLayoutStore';
 import { savedProjects } from './utils/projects';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -41,6 +42,7 @@ function App() {
   const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [showExportPreview, setShowExportPreview] = useState(false);
   const [projectName, setProjectName] = useState('My Project');
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -257,6 +259,10 @@ function App() {
                 </div>
               )}
             </div>
+            <button onClick={() => setShowExportPreview(true)} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs font-medium flex items-center gap-1 text-white">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export...
+            </button>
             <div className="flex items-center gap-2">
               <select value={currentResKey} onChange={handleResolutionChange} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-400 outline-none cursor-pointer hover:border-slate-600">
                 {Object.entries(RESOLUTION_PRESETS).map(([key, preset]) => (
@@ -335,6 +341,11 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Export Preview Dialog */}
+      {showExportPreview && (
+        <ExportPreviewDialog onClose={() => setShowExportPreview(false)} />
       )}
 
       {/* Load Dialog */}

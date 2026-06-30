@@ -1,4 +1,5 @@
 {
+  "fonts": {},
   "dialogue": {
     "textBoxSize": {
       "width": 1180,
@@ -17,7 +18,9 @@
       "x": 30,
       "y": 20
     },
-    "transitionDuration": 300
+    "transitionDuration": 300,
+    "blipSound": null,
+    "blipVolume": 0.3
   },
   "ui": {
     "toastPosition": {

@@ -193,6 +193,12 @@ Registry.registerNodeType('set_variable', {
       } else if (op === 'toggle') {
         const cur = ctrl.vars.get(node.variable);
         ctrl.vars.set(node.variable, !cur);
+      } else if (op === 'append') {
+        ctrl.vars.arrayAppend(node.variable, val);
+      } else if (op === 'remove') {
+        ctrl.vars.arrayRemove(node.variable, val);
+      } else if (op === 'clear') {
+        ctrl.vars.arrayClear(node.variable);
       }
     }
     ctrl.advance();

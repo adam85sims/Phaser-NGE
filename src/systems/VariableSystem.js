@@ -1,9 +1,10 @@
 import { Data } from './DataLoader.js';
 
 /**
- * VariableSystem — tracks game state variables (flags, counters, strings).
+ * VariableSystem — tracks game state variables (flags, counters, strings, arrays).
  * Inits from variables.json, modified during gameplay via scene actions.
  * Evaluates condition strings like "has_weapon_permit == true" or "courage >= 30"
+ * Supports array variables: inventory contains "sword", inventory not_contains "shield"
  */
 export class VariableSystem {
   constructor() {
@@ -29,7 +30,12 @@ export class VariableSystem {
   _initFromData() {
     const defs = Data.variables || {};
     for (const [key, def] of Object.entries(defs)) {
-      this.scopes[0][key] = def.default;
+      if (def.type === 'array') {
+        // Deep-copy array defaults so each instance gets its own copy
+        this.scopes[0][key] = Array.isArray(def.default) ? [...def.default] : [];
+      } else {
+        this.scopes[0][key] = def.default;
+      }
     }
   }
 
@@ -81,6 +87,49 @@ export class VariableSystem {
     this.set(name, !this.get(name));
   }
 
+  /* ── Array Operations ───────────────────────── */
+
+  /** Append a value to an array variable */
+  arrayAppend(name, value) {
+    const arr = this.get(name);
+    if (Array.isArray(arr)) {
+      arr.push(value);
+      this._notify(name, arr);
+    } else {
+      // If not an array yet, create one with this value
+      this.set(name, [value]);
+    }
+  }
+
+  /** Remove the first occurrence of a value from an array variable */
+  arrayRemove(name, value) {
+    const arr = this.get(name);
+    if (Array.isArray(arr)) {
+      const idx = arr.indexOf(value);
+      if (idx !== -1) {
+        arr.splice(idx, 1);
+        this._notify(name, arr);
+      }
+    }
+  }
+
+  /** Check if an array variable contains a value */
+  arrayContains(name, value) {
+    const arr = this.get(name);
+    return Array.isArray(arr) && arr.indexOf(value) !== -1;
+  }
+
+  /** Clear an array variable to empty */
+  arrayClear(name) {
+    const arr = this.get(name);
+    if (Array.isArray(arr)) {
+      arr.length = 0;
+      this._notify(name, arr);
+    } else {
+      this.set(name, []);
+    }
+  }
+
   /* ── Condition Evaluation ──────────────────── */
 
   /**
@@ -123,6 +172,17 @@ export class VariableSystem {
    * Evaluate a single (non-compound) condition.
    */
   _evaluateSingle(trimmed) {
+    // Check for 'contains' / 'not_contains' operators first (array-specific)
+    const containsMatch = trimmed.match(/^(\w+)\s+(not_contains|contains)\s+(.+)$/);
+    if (containsMatch) {
+      const [_, varName, op, rawVal] = containsMatch;
+      const val = this._parseValue(rawVal.trim());
+      const current = this.get(varName);
+      if (!Array.isArray(current)) return false;
+      const found = current.indexOf(val) !== -1;
+      return op === 'contains' ? found : !found;
+    }
+
     const match = trimmed.match(
       /^(\w+)\s*(==|!=|>=|<=|>|<|=)\s*(.+)$/
     );
@@ -191,7 +251,7 @@ export class VariableSystem {
 
   /* ── Actions ───────────────────────────────── */
 
-  /** Apply a node action: { setFlag, setValue, toggleFlag, addFlag } */
+  /** Apply a node action: { setFlag, setValue, toggleFlag, addFlag, arrayAppend, arrayRemove, arrayClear } */
   applyAction(action) {
     if (!action) return;
     if (action.setFlag && action.setValue !== undefined) {
@@ -203,13 +263,27 @@ export class VariableSystem {
     if (action.addFlag && action.delta !== undefined) {
       this.add(action.addFlag, action.delta);
     }
+    // Array operations
+    if (action.arrayAppend && action.arrayValue !== undefined) {
+      this.arrayAppend(action.arrayAppend, action.arrayValue);
+    }
+    if (action.arrayRemove && action.arrayValue !== undefined) {
+      this.arrayRemove(action.arrayRemove, action.arrayValue);
+    }
+    if (action.arrayClear) {
+      this.arrayClear(action.arrayClear);
+    }
   }
 
   /* ── Serialization ─────────────────────────── */
 
   /** Return plain object for save (only saves global scope) */
   serialize() {
-    return { ...this.scopes[0] };
+    const out = {};
+    for (const [key, val] of Object.entries(this.scopes[0])) {
+      out[key] = Array.isArray(val) ? [...val] : val;
+    }
+    return out;
   }
 
   /** Restore from save data */

@@ -32,13 +32,14 @@ Generates procedural textures:
    - `/data/theme.json` — optional (fetch errors are swallowed)
 3. **Dynamically iterates** `game.scenes[]` to fetch each scene file: `/data/scenes/{id}.json`
 4. **Dynamically iterates** `game.animations[]` to fetch each animation: `/data/animations/{id}.json`
-5. Populates `Data.game`, `Data.characters`, `Data.variables`, `Data.theme`, `Data.scenes[id]`, `Data.animations[id]`
-6. **SafeFetchJson** — any fetch response that starts with `<` (HTML fallback page from Vite 404) is silently ignored with a console.warn instead of crashing
-7. **Image preloading** — walks all scene layers and character portraits, fetches images as blobs, creates `Image` objects, and caches them as Phaser textures. Missing images log a warning and continue.
-8. **Audio preloading** — walks all scene/event nodes for `bgm`/`sfx` event values, probes extensions via HEAD, registers via `this.load.audio()`, awaits `load.start()`. Missing audio emits a one-time warning.
-9. Destroys loading text
-10. Checks `nge_debug_start` in localStorage (set by editor's "Play from here" feature) — if present, parses `{ sceneId, nodeId }`, clears the key, and transitions directly to `GameScene` with debug params
-11. Otherwise transitions to `SplashScene` (if `theme.ui.splash.enabled`) or `MenuScene`
+5. **Preloads custom fonts** from `theme.fonts` config — injects `@font-face` rules, awaits `document.fonts.ready`
+6. Populates `Data.game`, `Data.characters`, `Data.variables`, `Data.theme`, `Data.scenes[id]`, `Data.animations[id]`
+7. **SafeFetchJson** — any fetch response that starts with `<` (HTML fallback page from Vite 404) is silently ignored with a console.warn instead of crashing
+8. **Image preloading** — walks all scene layers and character portraits, fetches images as blobs, creates `Image` objects, and caches them as Phaser textures. Missing images log a warning and continue.
+9. **Audio preloading** — walks all scene/event nodes for `bgm`/`sfx` event values, probes extensions via HEAD, registers via `this.load.audio()`, awaits `load.start()`. Missing audio emits a one-time warning.
+10. Destroys loading text
+11. Checks `nge_debug_start` in localStorage (set by editor's "Play from here" feature) — if present, parses `{ sceneId, nodeId }`, clears the key, and transitions directly to `GameScene` with debug params
+12. Otherwise transitions to `SplashScene` (if `theme.ui.splash.enabled`) or `MenuScene`
 
 ### Error Handling
 If any required fetch fails, the loading text changes to `"LOAD ERROR: {message}"` in red. `theme.json` errors are silently swallowed (theme is optional).
@@ -56,3 +57,4 @@ The editor's "Play from here" feature writes `localStorage.nge_debug_start` as J
 - **Audio preloading is automatic** — walks every scene and registers `eventType: 'bgm'` / `'sfx'` event values. Extensions probed in order: `mp3, ogg, wav, opus, m4a`.
 - **Images use raw asset keys** — NOT prefixed `bg_`. The `bg_` prefix is only for theme splash/menu backgrounds. Scene layers and characters use the raw path as the key.
 - **`nge_debug_start` is cleared on read** — prevents stale debug starts on page reload.
+- **Font loading** — custom fonts are loaded from `theme.fonts` config via `@font-face`. Failed font loads log a warning but don't block boot. `document.fonts.ready` is awaited after all font loads attempt.

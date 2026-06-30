@@ -24,5 +24,10 @@
   "gallery": [
     "cg01",
     "cg02"
-  ]
+  ],
+  "localization": {
+    "defaultLanguage": "en",
+    "availableLanguages": ["en"],
+    "languageNames": { "en": "English" }
+  }
 }

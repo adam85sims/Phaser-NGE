@@ -65,6 +65,8 @@ export function renderInspectorContent(container) {
     variableDefs: editorState.variableDefs,
     scenesObj: editorState.scenes,
     scenesList: editorState.gameConfig?.scenes || [],
+    gameConfig: editorState.gameConfig,
+    theme: editorState.theme,
     otherNodes: (sceneData?.nodes||[]).filter(n => n.id !== node.id),
     backend
   };

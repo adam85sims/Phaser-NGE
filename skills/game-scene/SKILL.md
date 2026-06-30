@@ -103,3 +103,4 @@ When `BootScene` passes `{ loadScene, nodeId, variables }` in the scene data:
 - **Silent event types** — audio events (bgm/sfx/bgm_stop/play_animation) and `camera_flash` do NOT show a toast. All other event types show a brief notification.
 - **`_pendingEndText`** — stored as instance property so it can be cleaned up on scene switch.
 - **Shutdown** — the `shutdown()` lifecycle method destroys all systems.
+- **Settings menu language picker** — only appears if `game.localization.availableLanguages` has more than one entry. Cycles through available languages with +/- buttons.

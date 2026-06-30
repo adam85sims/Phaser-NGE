@@ -510,6 +510,212 @@ describe('VariableSystem', () => {
     });
   });
 
+  /* ── Array operations ────────── */
+
+  describe('array operations', () => {
+    it('initialises array variables with default empty array', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: [] },
+      });
+      const vs = new VariableSystem();
+      expect(vs.get('inventory')).toEqual([]);
+    });
+
+    it('initialises array variables with pre-populated default', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword', 'shield'] },
+      });
+      const vs = new VariableSystem();
+      expect(vs.get('inventory')).toEqual(['sword', 'shield']);
+    });
+
+    it('deep-copies array defaults so instances are independent', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword'] },
+      });
+      const vs1 = new VariableSystem();
+      const vs2 = new VariableSystem();
+      vs1.arrayAppend('inventory', 'axe');
+      expect(vs2.get('inventory')).toEqual(['sword']);
+    });
+
+    it('arrayAppend adds value to array', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: [] },
+      });
+      const vs = new VariableSystem();
+      vs.arrayAppend('inventory', 'sword');
+      expect(vs.get('inventory')).toEqual(['sword']);
+      vs.arrayAppend('inventory', 'shield');
+      expect(vs.get('inventory')).toEqual(['sword', 'shield']);
+    });
+
+    it('arrayAppend creates array if variable is not yet an array', () => {
+      setDataVariables({});
+      const vs = new VariableSystem();
+      vs.arrayAppend('new_list', 'item1');
+      expect(vs.get('new_list')).toEqual(['item1']);
+    });
+
+    it('arrayRemove removes first occurrence of value', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword', 'shield', 'sword'] },
+      });
+      const vs = new VariableSystem();
+      vs.arrayRemove('inventory', 'sword');
+      expect(vs.get('inventory')).toEqual(['shield', 'sword']);
+    });
+
+    it('arrayRemove does nothing if value not found', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword'] },
+      });
+      const vs = new VariableSystem();
+      vs.arrayRemove('inventory', 'axe');
+      expect(vs.get('inventory')).toEqual(['sword']);
+    });
+
+    it('arrayRemove does nothing if variable is not an array', () => {
+      setDataVariables({
+        name: { type: 'string', default: 'Lena' },
+      });
+      const vs = new VariableSystem();
+      expect(() => vs.arrayRemove('name', 'Lena')).not.toThrow();
+      expect(vs.get('name')).toBe('Lena');
+    });
+
+    it('arrayContains returns true when value is in array', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword', 'shield'] },
+      });
+      const vs = new VariableSystem();
+      expect(vs.arrayContains('inventory', 'sword')).toBe(true);
+      expect(vs.arrayContains('inventory', 'axe')).toBe(false);
+    });
+
+    it('arrayContains returns false for non-array variable', () => {
+      setDataVariables({
+        name: { type: 'string', default: 'Lena' },
+      });
+      const vs = new VariableSystem();
+      expect(vs.arrayContains('name', 'Lena')).toBe(false);
+    });
+
+    it('arrayClear empties the array', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword', 'shield'] },
+      });
+      const vs = new VariableSystem();
+      vs.arrayClear('inventory');
+      expect(vs.get('inventory')).toEqual([]);
+    });
+
+    it('arrayClear creates empty array if variable is not yet an array', () => {
+      setDataVariables({});
+      const vs = new VariableSystem();
+      vs.arrayClear('new_list');
+      expect(vs.get('new_list')).toEqual([]);
+    });
+
+    it('condition: array contains value', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword', 'shield'] },
+      });
+      const vs = new VariableSystem();
+      expect(vs.evaluate('inventory contains sword')).toBe(true);
+      expect(vs.evaluate('inventory contains axe')).toBe(false);
+    });
+
+    it('condition: array not_contains value', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword', 'shield'] },
+      });
+      const vs = new VariableSystem();
+      expect(vs.evaluate('inventory not_contains axe')).toBe(true);
+      expect(vs.evaluate('inventory not_contains sword')).toBe(false);
+    });
+
+    it('condition: contains returns false for non-array variable', () => {
+      setDataVariables({
+        name: { type: 'string', default: 'Lena' },
+      });
+      const vs = new VariableSystem();
+      expect(vs.evaluate('name contains Lena')).toBe(false);
+    });
+
+    it('condition: contains works with compound AND/OR', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword'] },
+        has_key: { type: 'boolean', default: true },
+      });
+      const vs = new VariableSystem();
+      expect(vs.evaluate('inventory contains sword AND has_key == true')).toBe(true);
+      expect(vs.evaluate('inventory contains axe OR has_key == true')).toBe(true);
+      expect(vs.evaluate('inventory contains axe AND has_key == true')).toBe(false);
+    });
+
+    it('condition: contains works with quoted strings', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['iron sword'] },
+      });
+      const vs = new VariableSystem();
+      expect(vs.evaluate('inventory contains "iron sword"')).toBe(true);
+      expect(vs.evaluate("inventory contains 'iron sword'")).toBe(true);
+    });
+
+    it('applyAction: arrayAppend via action', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: [] },
+      });
+      const vs = new VariableSystem();
+      vs.applyAction({ arrayAppend: 'inventory', arrayValue: 'sword' });
+      expect(vs.get('inventory')).toEqual(['sword']);
+    });
+
+    it('applyAction: arrayRemove via action', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword', 'shield'] },
+      });
+      const vs = new VariableSystem();
+      vs.applyAction({ arrayRemove: 'inventory', arrayValue: 'sword' });
+      expect(vs.get('inventory')).toEqual(['shield']);
+    });
+
+    it('applyAction: arrayClear via action', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword'] },
+      });
+      const vs = new VariableSystem();
+      vs.applyAction({ arrayClear: 'inventory' });
+      expect(vs.get('inventory')).toEqual([]);
+    });
+
+    it('serialize/deserialize preserves arrays', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: [] },
+      });
+      const vs = new VariableSystem();
+      vs.arrayAppend('inventory', 'sword');
+      vs.arrayAppend('inventory', 'shield');
+      const saved = vs.serialize();
+      expect(saved.inventory).toEqual(['sword', 'shield']);
+
+      const vs2 = new VariableSystem();
+      vs2.deserialize(saved);
+      expect(vs2.get('inventory')).toEqual(['sword', 'shield']);
+    });
+
+    it('serialize deep-copies arrays (not references)', () => {
+      setDataVariables({
+        inventory: { type: 'array', default: ['sword'] },
+      });
+      const vs = new VariableSystem();
+      const saved = vs.serialize();
+      saved.inventory.push('axe');
+      expect(vs.get('inventory')).toEqual(['sword']);
+    });
+  });
+
   /* ── Integration scenarios ─────── */
 
   describe('integration scenarios', () => {

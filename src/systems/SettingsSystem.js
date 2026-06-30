@@ -9,6 +9,7 @@ export const Settings = {
   sfxVolume: 1.0,
   voiceVolume: 1.0,
   fullscreen: false,
+  language: 'en',
 
   /** Load settings from localStorage */
   load() {
@@ -33,6 +34,7 @@ export const Settings = {
         sfxVolume: this.sfxVolume,
         voiceVolume: this.voiceVolume,
         fullscreen: this.fullscreen,
+        language: this.language,
       }));
     } catch {
       // localStorage full or unavailable — silently ignore
@@ -45,6 +47,7 @@ export const Settings = {
     this.sfxVolume = 1.0;
     this.voiceVolume = 1.0;
     this.fullscreen = false;
+    this.language = 'en';
   },
 
   /** Clamp a numeric value between min and max */

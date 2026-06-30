@@ -85,6 +85,31 @@ export class BootScene extends Phaser.Scene {
         if (data) Data.layouts[id] = data;
       });
 
+      // Preload custom fonts from theme config
+      const fonts = theme?.fonts || {};
+      const fontPromises = [];
+      for (const [name, config] of Object.entries(fonts)) {
+        if (!config.file) continue;
+        const fontUrl = `/assets/fonts/${config.file}`;
+        try {
+          const fontFace = new FontFace(name, `url(${fontUrl})`, {
+            weight: String(config.weight || 400)
+          });
+          document.fonts.add(fontFace);
+          fontPromises.push(
+            fontFace.load().catch(err => {
+              console.warn(`Failed to load font "${name}": ${err.message}`);
+            })
+          );
+        } catch (err) {
+          console.warn(`Font "${name}" setup failed: ${err.message}`);
+        }
+      }
+      if (fontPromises.length > 0) {
+        await Promise.all(fontPromises);
+        await document.fonts.ready;
+      }
+
       // Preload image assets referenced by scenes and characters
       const imageKeys = new Set();
       Object.values(Data.scenes).forEach(scene => {

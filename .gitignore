@@ -4,6 +4,7 @@ dist/
 *.log
 .env
 .env.local
+REVIEW_v1.md
 
 # Electron / build artifacts
 release/

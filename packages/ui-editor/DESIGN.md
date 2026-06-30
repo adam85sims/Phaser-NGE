@@ -464,17 +464,17 @@ Goal: A usable layout editor that can export NGE-compatible theme JSON.
 
 Goal: Export to real engines; make the editor feel professional.
 
-- [ ] **Godot 4 adapter** — `.tscn` scene file generation
-- [ ] **Unity adapter** — `.prefab` YAML generation
-- [ ] **Asset panel** — side panel or tab to browse/manage imported images
-- [ ] **Image element rendering** — show actual images on canvas (not just placeholders)
-- [ ] **Font preview** — render text with the actual selected font (web fonts loaded from assets)
-- [ ] **Alignment toolbar** — align left/center/right, distribute horizontally/vertically
-- [ ] **Color picker** — visual color picker instead of hex string input
-- [ ] **Project templates** — start from presets (Visual Novel, RPG Menu, FPS HUD, etc.)
-- [ ] **Drag-and-drop reparenting** in hierarchy tree
+- [x] **Godot 4 adapter** — `.tscn` scene file generation
+- [x] **Unity adapter** — `.prefab` YAML generation
+- [x] **Asset panel** — side panel or tab to browse/manage imported images
+- [x] **Image element rendering** — show actual images on canvas (not just placeholders)
+- [x] **Font preview** — render text with the actual selected font (web fonts loaded from assets)
+- [x] **Alignment toolbar** — align left/center/right, distribute horizontally/vertically
+- [x] **Color picker** — visual color picker instead of hex string input
+- [x] **Project templates** — start from presets (Visual Novel, RPG Menu, FPS HUD, etc.)
+- [x] **Drag-and-drop reparenting** in hierarchy tree
 - [ ] **Export preview** — show what each adapter will produce before exporting
-- [ ] **Unreal adapter** — Python UMG generation script
+- [x] **Unreal adapter** — Python UMG generation script
 
 ### Phase 3 — Advanced Features
 

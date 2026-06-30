@@ -19,11 +19,37 @@ Registry.extendNodeType('dialogue', {
       `<option value="${p}"${node.position===p?' selected':''}>${p}</option>`
     ).join('');
 
+    // Language selector for localized text
+    const langs = ctx.gameConfig?.localization?.availableLanguages || ['en'];
+    const langNames = ctx.gameConfig?.localization?.languageNames || {};
+    const hasLocalization = langs.length > 1;
+
+    // Font options from theme
+    const fonts = ctx.theme?.fonts || {};
+    const fontOpts = Object.keys(fonts).map(f => `<option value="${f}">${f}</option>`).join('');
+
     return `
+      <div class="form-group"><label>Text</label><textarea data-field="text" style="min-height:60px">${(node.text||'').replace(/</g,'&lt;')}</textarea>
+        <button class="add-btn" id="tag-ref-btn" style="margin-top:4px;font-size:10px;padding:2px 6px">📋 Tag Reference</button>
+        <div id="tag-ref-panel" style="display:none;margin-top:6px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:8px;font-size:10px;line-height:1.6">
+          <b>Formatting:</b> [b]bold[/b] [i]italic[/i] [color=#ff0000]red[/color]<br/>
+          <b>Size:</b> [size=24]big[/size] [size=+4]relative+[/size] [size=-2]relative-[/size]<br/>
+          <b>Font:</b> [font=serif]serif text[/font]<br/>
+          <b>Effects:</b> [wave]wavy[/wave] [shake]shaking[/shake]<br/>
+          <b>Typewriter:</b> [speed=80]slow[/speed] [delay=500]pause[/delay]<br/>
+          <b>Special:</b> [playername] [show:layer] [hide:layer] [anim:target:key]<br/>
+          <b>Conditional:</b> {if var == val}text{/if} {if cond}A{else}B{/if}
+        </div>
+      </div>
+      ${hasLocalization ? `<div class="form-group"><label>Language</label><select data-field="textLang" id="text-lang-select">
+        ${langs.map(l => `<option value="${l}"${(node._textLang||'en')===l?' selected':''}>${langNames[l]||l}</option>`).join('')}
+      </select></div>` : ''}
       <div class="form-group"><label>Speaker</label><select data-field="speaker" id="speaker-select">
         <option value="">(narration)</option>${speakerOpts}</select></div>
       <div class="form-group"><label>Expression</label><select data-field="expression" id="expression-select">
         <option value="">— none —</option></select></div>
+      ${fontOpts ? `<div class="form-group"><label>Font Override</label><select data-field="fontOverride" id="font-override-select">
+        <option value="">— theme default —</option>${fontOpts}</select></div>` : ''}
       <div class="form-group"><label>Position</label><select data-field="position">
         <option value="">— default —</option>${posOpts}</select></div>
       <div class="form-group">
@@ -37,7 +63,7 @@ Registry.extendNodeType('dialogue', {
       </div>
       <div class="form-group"><label>Z-Index</label><input type="number" value="${node.zIndex??0}" data-field="zIndex" data-type="number"/></div>
       <div class="form-group"><label>Voice (Audio Key)</label><select data-field="voice" id="voice-select"><option value="">— none —</option></select></div>
-      <div class="form-group"><label>Text</label><textarea data-field="text">${(node.text||'').replace(/</g,'&lt;')}</textarea></div>
+      <div class="form-group"><label>Blip Sound</label><select data-field="blipSound" id="blip-sound-select"><option value="">— none —</option></select></div>
       <div class="form-row"><div class="form-group"><label>Auto</label><select data-field="autoAdvance">
         <option value="false">No</option><option value="true"${node.autoAdvance?' selected':''}>Yes</option></select></div>
       <div class="form-group"><label>Wait ms</label><input type="number" value="${node.waitTime||2000}" data-field="waitTime" data-type="number"/></div></div>
@@ -45,6 +71,15 @@ Registry.extendNodeType('dialogue', {
     `;
   },
   bindEditor: (node, container, ctx, helpers) => {
+    // Tag reference toggle
+    const tagRefBtn = container.querySelector('#tag-ref-btn');
+    const tagRefPanel = container.querySelector('#tag-ref-panel');
+    if (tagRefBtn && tagRefPanel) {
+      tagRefBtn.addEventListener('click', () => {
+        tagRefPanel.style.display = tagRefPanel.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+
     const bgSelect = container.querySelector('#background-select');
     const bgThumb = container.querySelector('#background-thumb');
     const exprSelect = container.querySelector('#expression-select');
@@ -102,6 +137,24 @@ Registry.extendNodeType('dialogue', {
         voiceSelect.addEventListener('change', () => {
           helpers.captureUndoState();
           node.voice = voiceSelect.value;
+          helpers.markDirty();
+        });
+      });
+    }
+
+    // Blip sound dropdown
+    const blipSelect = container.querySelector('#blip-sound-select');
+    if (blipSelect && ctx.backend) {
+      ctx.backend.listAssets().then(assets => {
+        const sfxAssets = (Array.isArray(assets) ? assets : [])
+          .filter(f => f.path && f.path.startsWith('audio/sfx/'))
+          .map(f => f.name.replace(/\.[^.]+$/, ''));
+        blipSelect.innerHTML = '<option value="">— none —</option>' +
+          sfxAssets.map(k => `<option value="${k}"${k === node.blipSound ? ' selected' : ''}>${k}</option>`).join('');
+
+        blipSelect.addEventListener('change', () => {
+          helpers.captureUndoState();
+          node.blipSound = blipSelect.value;
           helpers.markDirty();
         });
       });
@@ -628,19 +681,79 @@ Registry.extendNodeType('set_variable', {
   color: '#059669',
   defaultData: () => ({ variable: '', value: '', operation: 'set', next: '' }),
   renderEditor: (node, ctx) => {
-    const varOpts = Object.keys(ctx.variableDefs || {}).map(k => `<option value="${k}"${node.variable===k?' selected':''}>${k}</option>`).join('');
+    const varOpts = Object.keys(ctx.variableDefs || {}).map(k => {
+      const def = ctx.variableDefs[k];
+      const typeLabel = def?.type === 'array' ? ' [array]' : '';
+      return `<option value="${k}"${node.variable===k?' selected':''}>${k}${typeLabel}</option>`;
+    }).join('');
     const nodeOpts = ctx.otherNodes.map(n => `<option value="${n.id}"${node.next===n.id?' selected':''}>${n.id}</option>`).join('');
+
+    // Check if selected variable is an array type
+    const selectedDef = ctx.variableDefs?.[node.variable];
+    const isArray = selectedDef?.type === 'array';
+
+    const scalarOps = `
+      <option value="set"${node.operation==='set'?' selected':''}>Set</option>
+      <option value="add"${node.operation==='add'?' selected':''}>Add</option>
+      <option value="toggle"${node.operation==='toggle'?' selected':''}>Toggle</option>
+    `;
+    const arrayOps = `
+      <option value="append"${node.operation==='append'?' selected':''}>Append</option>
+      <option value="remove"${node.operation==='remove'?' selected':''}>Remove</option>
+      <option value="clear"${node.operation==='clear'?' selected':''}>Clear</option>
+    `;
+
+    const opOpts = isArray ? arrayOps : scalarOps;
+
+    // Hide value field for 'clear' and 'toggle' operations
+    const showValue = node.operation !== 'clear' && node.operation !== 'toggle';
+    const valueLabel = isArray ? 'Item' : 'Value';
+
     return `
-      <div class="form-group"><label>Variable</label><select data-field="variable">
+      <div class="form-group"><label>Variable</label><select data-field="variable" id="sv-variable">
         <option value="">— select —</option>${varOpts}</select></div>
-      <div class="form-group"><label>Value</label><input value="${node.value||''}" data-field="value"/></div>
-      <div class="form-group"><label>Operation</label><select data-field="operation">
-        <option value="set"${node.operation==='set'?' selected':''}>Set</option>
-        <option value="add"${node.operation==='add'?' selected':''}>Add</option>
-        <option value="toggle"${node.operation==='toggle'?' selected':''}>Toggle</option>
+      <div class="form-group"><label>Operation</label><select data-field="operation" id="sv-operation">
+        ${opOpts}
       </select></div>
+      ${showValue ? `<div class="form-group"><label>${valueLabel}</label><input value="${node.value||''}" data-field="value" id="sv-value"/></div>` : ''}
       <div class="form-group"><label>Next</label><select data-field="next"><option value="">— none —</option>${nodeOpts}</select></div>
     `;
+  },
+  bindEditor: (node, container, ctx, helpers) => {
+    const varSelect = container.querySelector('#sv-variable');
+    const opSelect = container.querySelector('#sv-operation');
+
+    if (varSelect) {
+      varSelect.addEventListener('change', () => {
+        helpers.captureUndoState();
+        node.variable = varSelect.value;
+        // Switch operation list based on variable type
+        const selectedDef = ctx.variableDefs?.[node.variable];
+        const isArray = selectedDef?.type === 'array';
+        if (isArray) {
+          // If current op is scalar-only, switch to append
+          if (!['append', 'remove', 'clear'].includes(node.operation)) {
+            node.operation = 'append';
+          }
+        } else {
+          // If current op is array-only, switch to set
+          if (['append', 'remove', 'clear'].includes(node.operation)) {
+            node.operation = 'set';
+          }
+        }
+        helpers.markDirty();
+        helpers.dispatchRender();
+      });
+    }
+
+    if (opSelect) {
+      opSelect.addEventListener('change', () => {
+        helpers.captureUndoState();
+        node.operation = opSelect.value;
+        helpers.markDirty();
+        helpers.dispatchRender();
+      });
+    }
   },
   executeRuntime: (node, controller) => {
     controller.setVariableNode(node);

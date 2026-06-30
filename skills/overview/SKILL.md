@@ -122,14 +122,16 @@ Phaser-NGE/
 | Skill directory | Source file | Purpose |
 |----------------|-------------|---------|
 | `scene-controller/` | `src/systems/SceneController.js` | Graph-based narrative state machine + call stack |
-| `dialogue-system/` | `src/systems/DialogueSystem.js` | Typewriter text, choices, nameplates, inline tags, history |
+| `dialogue-system/` | `src/systems/DialogueSystem.js` | Typewriter text, choices, rich text, localization, history |
+| `rich-text-helper/` | `src/systems/RichTextHelper.js` | Tag parser: BBCode, conditionals, control tags |
+| `transition-system/` | `src/systems/TransitionSystem.js` | 15 transition types (fade, wipe, crossfade, iris, zoom) |
 | `character-system/` | `src/systems/CharacterSystem.js` | Portrait display, expressions, 5-position layout |
-| `variable-system/` | `src/systems/VariableSystem.js` | Scoped flags, counters, compound condition evaluation |
+| `variable-system/` | `src/systems/VariableSystem.js` | Scoped flags, arrays, compound conditions, contains |
 | `save-system/` | `src/systems/SaveSystem.js` | LocalStorage save/load, quick/auto save |
 | `audio-system/` | `src/systems/AudioSystem.js` | BGM/SFX manager with crossfade |
 | `data-loader/` | `src/systems/DataLoader.js` | Data store, fetch-based loading |
-| `boot-scene/` | `src/scenes/BootScene.js` | Boot, fetch, populate Data, debug start |
-| `game-scene/` | `src/scenes/GameScene.js` | Main loop, 10-system wiring, 12+ hotkeys |
+| `boot-scene/` | `src/scenes/BootScene.js` | Boot, fetch, font preload, populate Data, debug start |
+| `game-scene/` | `src/scenes/GameScene.js` | Main loop, 10-system wiring, language picker, 12+ hotkeys |
 | `editor-app/` | `tools/app.js` + `tools/*.js` | Unified editor SPA, registry-driven |
 
 ## Commands
@@ -137,7 +139,7 @@ Phaser-NGE/
 ```bash
 npm install                    # one-time
 npm run dev                    # Vite dev server on http://localhost:3000
-npm test                       # Vitest + jsdom (~190 tests)
+npm test                       # Vitest + jsdom (~257 tests)
 npm run test:watch             # Vitest watch mode
 npm run build                  # Production bundle to dist/
 npm run import-asset -- <type> <file>

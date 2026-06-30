@@ -3,6 +3,19 @@ import { Settings } from './SettingsSystem.js';
 import { parseRichText, renderRichTextUpTo } from './RichTextHelper.js';
 
 /**
+ * Resolve localized text — handles both plain strings and language objects.
+ * Plain string: "Hello" → "Hello"
+ * Language object: { "en": "Hello", "ja": "こんにちは" } → resolved by language
+ */
+function resolveText(text, language) {
+  if (typeof text === 'string') return text;
+  if (typeof text === 'object' && text !== null) {
+    return text[language] || text.en || Object.values(text)[0] || '';
+  }
+  return String(text || '');
+}
+
+/**
  * DialogueSystem — renders text boxes, typewriter effect,
  * speaker nameplates, and choice lists onto a Phaser scene.
  *
@@ -28,15 +41,20 @@ export class DialogueSystem {
     this.container = scene.add.container(0, 0).setDepth(100).setScrollFactor(0);
 
     // Styling from theme
+    const dialogueFont = theme.fontFamily ?? 'monospace';
     this.textStyle = {
       fontSize: theme.fontSize ? `${theme.fontSize}px` : '16px',
-      fontFamily: theme.fontFamily ?? 'monospace',
+      fontFamily: dialogueFont,
       color: theme.textColor ?? '#e0e0e0',
       wordWrap: { width: this.box.w - this.box.paddingX * 2 },
       lineSpacing: theme.lineSpacing ?? 6
     };
 
     this.textSpeed = theme.textSpeed ?? Settings.textSpeed;
+
+    // Blip sound config
+    this._blipSound = theme.blipSound || null;
+    this._blipVolume = theme.blipVolume ?? 0.3;
 
     // Typewriter state
     this._fullText = '';
@@ -45,6 +63,10 @@ export class DialogueSystem {
     this._timer = null;
     this._isTyping = false;
     this._callback = null;  // called when typewriter finishes or is skipped
+    this._currentSpeed = this.textSpeed;  // can be changed by [speed] tags
+
+    // Control tags (speed, delay)
+    this._controlTags = [];
 
     // ── Dialogue history ──
     this.history = [];      // [{ speaker, text }]
@@ -56,8 +78,36 @@ export class DialogueSystem {
     this.autoMode = false;
     this._autoModeTimer = null;
 
+    // Inject CSS for wave/shake animations
+    this._injectStyles();
+
     // Build the UI
     this._buildUI();
+  }
+
+  _injectStyles() {
+    if (document.getElementById('nge-dialogue-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'nge-dialogue-styles';
+    style.textContent = `
+      .nge-wave {
+        display: inline-block;
+        animation: nge-wave-anim 0.6s ease-in-out infinite alternate;
+      }
+      @keyframes nge-wave-anim {
+        0% { transform: translateY(0px); }
+        100% { transform: translateY(-4px); }
+      }
+      .nge-shake {
+        display: inline-block;
+        animation: nge-shake-anim 0.15s ease-in-out infinite alternate;
+      }
+      @keyframes nge-shake-anim {
+        0% { transform: translateX(-1px); }
+        100% { transform: translateX(1px); }
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   /* ── Build the text box ─────────────────────── */
@@ -191,24 +241,35 @@ export class DialogueSystem {
     this.setVisible(true);
     this._callback = onComplete;
 
-    // Record history
-    this.history.push({ speaker: speakerId, text: text });
+    // Resolve localized text
+    const resolvedText = resolveText(text, Settings.language);
 
-    // Nameplate
+    // Record history (store raw text for translation reference)
+    this.history.push({ speaker: speakerId, text: resolvedText });
+
+    // Resolve player name
     const charData = Data.getCharacter(speakerId);
+    const playername = this.scene.vars?.get?.('player_name') || '';
     if (charData && charData.name) {
-      this.nameplate.setText(charData.name);
+      const displayName = typeof charData.name === 'object'
+        ? (charData.name[Settings.language] || charData.name.en || Object.values(charData.name)[0] || speakerId)
+        : charData.name;
+      this.nameplate.setText(displayName);
       this.nameplate.setStyle({ color: charData.color || '#ffffff' });
       this.nameplate.setVisible(true);
     } else {
       this.nameplate.setVisible(false);
     }
 
-    // Parse tags and prepare tokens
-    const parsed = parseRichText(text || '');
+    // Parse tags and prepare tokens — pass vars for conditional text resolution
+    const parsed = parseRichText(resolvedText || '', this.scene.vars);
     this._tokens = parsed.tokens;
     this._tags = parsed.engineTags;
+    this._controlTags = parsed.controlTags || [];
     this._totalChars = parsed.totalChars;
+
+    // Reset speed to base for each dialogue line
+    this._currentSpeed = this.textSpeed;
 
     // Start typewriter
     this._charIndex = 0;
@@ -222,14 +283,13 @@ export class DialogueSystem {
   }
 
   _typeNextChar() {
-    // Check if any tags trigger at the current charIndex
+    // Check if any engine tags trigger at the current charIndex
     while (this._tags.length > 0 && this._tags[0].index === this._charIndex) {
       const tag = this._tags.shift();
       if (this.scene) {
         if (tag.action === 'show' && this.scene.layers) this.scene.layers.showLayerByAsset(tag.target, 300);
         else if (tag.action === 'hide' && this.scene.layers) this.scene.layers.hideLayerByAsset(tag.target, 300);
         else if (tag.action === 'anim' && tag.target && tag.animKey) {
-          // Play inline animation
           let targetObj = null;
           if (this.scene.layers?.layers?.[tag.target]) targetObj = this.scene.layers.layers[tag.target];
           else if (this.scene.characters?.portraits?.[tag.target]) targetObj = this.scene.characters.portraits[tag.target];
@@ -246,6 +306,21 @@ export class DialogueSystem {
       }
     }
 
+    // Check if any control tags trigger at the current charIndex
+    while (this._controlTags.length > 0 && this._controlTags[0].index === this._charIndex) {
+      const ctag = this._controlTags.shift();
+      if (ctag.action === 'speed') {
+        this._currentSpeed = ctag.value;
+      } else if (ctag.action === 'delay') {
+        // Pause typewriter for the delay duration
+        if (this._timer) this._timer.remove();
+        this._timer = this.scene.time.delayedCall(ctag.value, () => {
+          this._typeNextChar();
+        });
+        return;  // wait for delay callback
+      }
+    }
+
     if (this._charIndex >= this._totalChars) {
       this._isTyping = false;
       this.continueArrow.setAlpha(1);
@@ -258,13 +333,32 @@ export class DialogueSystem {
         yoyo: true,
         repeat: -1
       });
+      // Schedule auto-advance if auto mode is on
+      if (this.autoMode) {
+        this._scheduleAutoAdvance();
+      }
+      // In skip mode, immediately fire callback to advance
+      if (this.skipMode && this._callback) {
+        const cb = this._callback;
+        this._callback = null;
+        cb();
+      }
       return;
     }
 
     this._charIndex++;
-    this.textDOM.node.innerHTML = renderRichTextUpTo(this._tokens, this._charIndex);
+    const playername = this.scene.vars?.get?.('player_name') || '';
+    this.textDOM.node.innerHTML = renderRichTextUpTo(this._tokens, this._charIndex, playername);
 
-    this._timer = this.scene.time.delayedCall(this.textSpeed, () => {
+    // Play blip sound on non-space characters
+    if (this._blipSound && this.scene?.audio) {
+      const char = this._tokens[this._charIndex - 1];
+      if (char?.type === 'char' && char.char !== ' ' && char.char !== '\n') {
+        this.scene.audio.playSFX(this._blipSound, this._blipVolume);
+      }
+    }
+
+    this._timer = this.scene.time.delayedCall(this._currentSpeed, () => {
       this._typeNextChar();
     });
   }
@@ -274,7 +368,7 @@ export class DialogueSystem {
     if (!this._isTyping) return;
     if (this._timer) this._timer.remove();
 
-    // Execute all remaining tags instantly
+    // Execute all remaining engine tags instantly
     while (this._tags.length > 0) {
       const tag = this._tags.shift();
       if (this.scene && this.scene.layers) {
@@ -283,8 +377,13 @@ export class DialogueSystem {
       }
     }
 
+    // Discard remaining control tags
+    this._controlTags = [];
+    this._currentSpeed = this.textSpeed;
+
     this._charIndex = this._totalChars;
-    this.textDOM.node.innerHTML = renderRichTextUpTo(this._tokens, this._totalChars);
+    const playername = this.scene.vars?.get?.('player_name') || '';
+    this.textDOM.node.innerHTML = renderRichTextUpTo(this._tokens, this._totalChars, playername);
     this._isTyping = false;
     this.continueArrow.setAlpha(1);
     if (this._arrowTween) this._arrowTween.destroy();
@@ -335,7 +434,7 @@ export class DialogueSystem {
     }
 
     // Hide main text
-    this.text.setText('');
+    this.textDOM.node.innerHTML = '';
 
     // Build choice buttons
     this.hideChoices();
@@ -370,6 +469,17 @@ export class DialogueSystem {
     this.choiceContainer.setVisible(false);
   }
 
+  /** Highlight a choice by index (for arrow key navigation) */
+  highlightChoice(index) {
+    this.choices.forEach((c, i) => {
+      if (i === index) {
+        c.setColor('#ffffff');
+      } else {
+        c.setColor(i === 0 ? '#00ccff' : '#aaaaaa');
+      }
+    });
+  }
+
   /* ── Skip / Auto Modes ─────────────────────────── */
 
   setSkipMode(enabled) {
@@ -399,7 +509,10 @@ export class DialogueSystem {
   _scheduleAutoAdvance() {
     this._cancelAutoAdvance();
     if (!this.autoMode) return;
-    this._autoModeTimer = this.scene.time.delayedCall(2000, () => {
+    // Wait longer for longer text, with a minimum of 1.5s and max of 4s
+    const textLen = this._totalChars || 0;
+    const delay = Math.max(1500, Math.min(4000, 800 + textLen * 40));
+    this._autoModeTimer = this.scene.time.delayedCall(delay, () => {
       // Advance if still in auto mode and not at a choice
       if (this.autoMode && !this._isTyping) {
         // Signal to the game scene to advance

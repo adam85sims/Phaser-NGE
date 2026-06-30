@@ -56,6 +56,10 @@ export class GameScene extends Phaser.Scene {
 
     // ── Start the game ──
     this._pendingEndText = null;
+    this._pauseOpen = false;
+    this._pauseContainer = null;
+    this._menuOpen = false;
+    this._choiceSelected = -1;
     const startScene = initData.loadScene || this._getStartScene();
     this.sceneCtrl.startScene(startScene, initData.nodeId);
   }
@@ -269,7 +273,7 @@ export class GameScene extends Phaser.Scene {
 
   _setupInput() {
     this.input.keyboard.on('keydown-SPACE', () => this._handleAdvance());
-    this.input.keyboard.on('keydown-ENTER', () => this._handleAdvance());
+    this.input.keyboard.on('keydown-ENTER', () => this._handleChoiceConfirm());
     this.input.on('pointerup', () => this._handleAdvance());
 
     // Number keys for choices
@@ -281,6 +285,21 @@ export class GameScene extends Phaser.Scene {
         }
       });
     }
+
+    // Arrow keys for choice navigation
+    this._choiceSelected = -1;
+    this.input.keyboard.on('keydown-UP', () => {
+      if (this.sceneCtrl.isAtChoice && this.dialogue.choices.length > 0) {
+        this._choiceSelected = Math.max(0, this._choiceSelected - 1);
+        this.dialogue.highlightChoice(this._choiceSelected);
+      }
+    });
+    this.input.keyboard.on('keydown-DOWN', () => {
+      if (this.sceneCtrl.isAtChoice && this.dialogue.choices.length > 0) {
+        this._choiceSelected = Math.min(this.dialogue.choices.length - 1, this._choiceSelected + 1);
+        this.dialogue.highlightChoice(this._choiceSelected);
+      }
+    });
 
     // F1–F4: jump to dev/test scenes (only if they exist in loaded data)
     const devSceneHotkeys = {
@@ -299,15 +318,19 @@ export class GameScene extends Phaser.Scene {
       });
     });
 
+    // ESC: toggle pause menu
     this.input.keyboard.on('keydown-ESC', () => {
-      this.dialogue.hideHistory();
-      TransitionSystem.runTransition(this, 'fade', 600,
-        null,
-        () => {
-          this._cleanupUI();
-          this.scene.start('MenuScene');
+      if (this._menuOpen) {
+        // In save/load/settings sub-menu → go back to pause menu
+        if (this._pauseContainer && !this._pauseOpen) {
+          this._closePauseMenu();
+          this._showPauseMenu();
+        } else if (this._pauseOpen) {
+          this._closePauseMenu();
         }
-      );
+      } else {
+        this._showPauseMenu();
+      }
     });
 
     // H: toggle dialogue history
@@ -349,6 +372,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   _handleAdvance() {
+    if (this._pauseOpen) return;
     if (!this.sceneCtrl.isRunning) return;
     if (this.sceneCtrl.isAtChoice) return;
 
@@ -370,6 +394,23 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Handle ENTER during choice selection */
+  _handleChoiceConfirm() {
+    if (this._pauseOpen) return;
+    if (this.sceneCtrl.isAtChoice) {
+      if (this._choiceSelected >= 0 && this._choiceSelected < this.dialogue.choices.length) {
+        this.sceneCtrl.selectChoice(this._choiceSelected);
+        this.dialogue.hideChoices();
+        this._choiceSelected = -1;
+      } else {
+        // No selection yet — advance through text if typing
+        this._handleAdvance();
+      }
+    } else {
+      this._handleAdvance();
+    }
+  }
+
   _switchScene(sceneId) {
     // Clean up and switch to a different scene
     this._cleanupUI();
@@ -387,6 +428,334 @@ export class GameScene extends Phaser.Scene {
     this.audio.stopVoice(200);
     if (this._pendingEndText) this._pendingEndText.destroy();
     this._pendingEndText = null;
+  }
+
+  /* ── PAUSE MENU ──────────────────────────────── */
+
+  _showPauseMenu() {
+    if (this._pauseOpen) return;
+    this._pauseOpen = true;
+    this._menuOpen = true;
+    this.sceneCtrl.isRunning = false;
+
+    const W = this.W;
+    const H = this.H;
+    const container = this.add.container(0, 0).setDepth(1000);
+    this._pauseContainer = container;
+
+    // Semi-transparent overlay
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.7);
+    overlay.fillRect(0, 0, W, H);
+    overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, W, H), Phaser.Geom.Rectangle.Contains);
+    container.add(overlay);
+
+    // Title
+    const title = this.add.text(W / 2, H * 0.25, 'PAUSED', {
+      fontSize: '48px', fontFamily: 'monospace', color: '#ffffff'
+    }).setOrigin(0.5);
+    container.add(title);
+
+    // Menu items
+    const items = [
+      { label: 'Resume',     action: () => this._closePauseMenu() },
+      { label: 'Save Game',  action: () => { this._closePauseMenu(); this._showSaveMenu(); } },
+      { label: 'Load Game',  action: () => { this._closePauseMenu(); this._showLoadMenu(); } },
+      { label: 'Settings',   action: () => { this._closePauseMenu(); this._showSettingsMenu(); } },
+      { label: 'Title Screen', action: () => { this._closePauseMenu(); this._returnToMenu(); } },
+    ];
+
+    let yPos = H * 0.4;
+    items.forEach((item) => {
+      const btn = this.add.text(W / 2, yPos, item.label, {
+        fontSize: '24px', fontFamily: 'monospace', color: '#aaaaaa',
+        padding: { x: 20, y: 10 }
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+      btn.on('pointerover', () => btn.setColor('#ffffff'));
+      btn.on('pointerout', () => btn.setColor('#aaaaaa'));
+      btn.on('pointerup', item.action);
+      container.add(btn);
+      yPos += 50;
+    });
+
+    // ESC hint
+    const hint = this.add.text(W / 2, H - 40, 'Press ESC to resume', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#666688'
+    }).setOrigin(0.5);
+    container.add(hint);
+  }
+
+  _closePauseMenu() {
+    if (!this._pauseOpen) return;
+    this._pauseOpen = false;
+    this._menuOpen = false;
+    if (this._pauseContainer) {
+      this._pauseContainer.destroy();
+      this._pauseContainer = null;
+    }
+    this.sceneCtrl.isRunning = true;
+  }
+
+  _returnToMenu() {
+    this._cleanupUI();
+    TransitionSystem.runTransition(this, 'fade', 600, null, () => {
+      this.scene.start('MenuScene');
+    });
+  }
+
+  /* ── SAVE MENU ──────────────────────────────── */
+
+  _showSaveMenu() {
+    this._menuOpen = true;
+    const W = this.W;
+    const H = this.H;
+    const container = this.add.container(0, 0).setDepth(1000);
+    this._pauseContainer = container;
+
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.85);
+    overlay.fillRect(0, 0, W, H);
+    overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, W, H), Phaser.Geom.Rectangle.Contains);
+    container.add(overlay);
+
+    const title = this.add.text(W / 2, 40, 'SAVE GAME', {
+      fontSize: '32px', fontFamily: 'monospace', color: '#ffffff'
+    }).setOrigin(0.5);
+    container.add(title);
+
+    const slots = this.saveSys.getSlots();
+    const slotCount = 10;
+    const startY = 100;
+
+    for (let i = 0; i < slotCount; i++) {
+      const slot = slots[i];
+      const y = startY + i * 50;
+      const isAuto = i === 9;
+
+      const slotBg = this.add.graphics();
+      slotBg.fillStyle(0x222244, 0.8);
+      slotBg.fillRoundedRect(W / 2 - 250, y - 15, 500, 40, 4);
+      container.add(slotBg);
+
+      const label = isAuto ? `[Auto] ` : `[${i + 1}] `;
+      let detail = '— Empty —';
+      if (slot && slot.timestamp) {
+        detail = `${slot.sceneId || '?'} — ${this.saveSys.formatTimestamp(slot.timestamp)}`;
+      }
+
+      const slotText = this.add.text(W / 2 - 240, y, label + detail, {
+        fontSize: '16px', fontFamily: 'monospace',
+        color: slot ? '#cccccc' : '#666666'
+      }).setOrigin(0, 0.5);
+      container.add(slotText);
+
+      if (!isAuto) {
+        slotText.setInteractive({ useHandCursor: true });
+        slotText.on('pointerover', () => slotText.setColor('#00ccff'));
+        slotText.on('pointerout', () => slotText.setColor(slot ? '#cccccc' : '#666666'));
+        slotText.on('pointerup', () => {
+          this.saveSys.save(i);
+          this._showToast(`Saved to slot ${i + 1}`);
+          this._closePauseMenu();
+        });
+      }
+    }
+
+    // Back button
+    const backBtn = this.add.text(W / 2, H - 50, '← Back (ESC)', {
+      fontSize: '18px', fontFamily: 'monospace', color: '#aaaaaa'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
+    backBtn.on('pointerout', () => backBtn.setColor('#aaaaaa'));
+    backBtn.on('pointerup', () => {
+      this._closePauseMenu();
+      this._showPauseMenu();
+    });
+    container.add(backBtn);
+  }
+
+  /* ── LOAD MENU ──────────────────────────────── */
+
+  _showLoadMenu() {
+    this._menuOpen = true;
+    const W = this.W;
+    const H = this.H;
+    const container = this.add.container(0, 0).setDepth(1000);
+    this._pauseContainer = container;
+
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.85);
+    overlay.fillRect(0, 0, W, H);
+    overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, W, H), Phaser.Geom.Rectangle.Contains);
+    container.add(overlay);
+
+    const title = this.add.text(W / 2, 40, 'LOAD GAME', {
+      fontSize: '32px', fontFamily: 'monospace', color: '#ffffff'
+    }).setOrigin(0.5);
+    container.add(title);
+
+    const slots = this.saveSys.getSlots();
+    const slotCount = 10;
+    const startY = 100;
+
+    for (let i = 0; i < slotCount; i++) {
+      const slot = slots[i];
+      const y = startY + i * 50;
+      const isAuto = i === 9;
+
+      const slotBg = this.add.graphics();
+      slotBg.fillStyle(0x222244, 0.8);
+      slotBg.fillRoundedRect(W / 2 - 250, y - 15, 500, 40, 4);
+      container.add(slotBg);
+
+      const label = isAuto ? `[Auto] ` : `[${i + 1}] `;
+      let detail = '— Empty —';
+      if (slot && slot.timestamp) {
+        detail = `${slot.sceneId || '?'} — ${this.saveSys.formatTimestamp(slot.timestamp)}`;
+      }
+
+      const slotText = this.add.text(W / 2 - 240, y, label + detail, {
+        fontSize: '16px', fontFamily: 'monospace',
+        color: slot ? '#cccccc' : '#666666'
+      }).setOrigin(0, 0.5);
+      container.add(slotText);
+
+      if (slot) {
+        slotText.setInteractive({ useHandCursor: true });
+        slotText.on('pointerover', () => slotText.setColor('#00ccff'));
+        slotText.on('pointerout', () => slotText.setColor(slot ? '#cccccc' : '#666666'));
+        slotText.on('pointerup', () => {
+          this._closePauseMenu();
+          const loaded = this.saveSys.load(i);
+          if (loaded && loaded.sceneId) {
+            this._cleanupUI();
+            this.cameras.main.fadeOut(200, 0, 0, 0);
+            this.cameras.main.once('camerafadeoutcomplete', () => {
+              this.sceneCtrl.startScene(loaded.sceneId, loaded.nodeId);
+            });
+          }
+        });
+      }
+    }
+
+    // Back button
+    const backBtn = this.add.text(W / 2, H - 50, '← Back (ESC)', {
+      fontSize: '18px', fontFamily: 'monospace', color: '#aaaaaa'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
+    backBtn.on('pointerout', () => backBtn.setColor('#aaaaaa'));
+    backBtn.on('pointerup', () => {
+      this._closePauseMenu();
+      this._showPauseMenu();
+    });
+    container.add(backBtn);
+  }
+
+  /* ── SETTINGS MENU ──────────────────────────── */
+
+  _showSettingsMenu() {
+    this._menuOpen = true;
+    const W = this.W;
+    const H = this.H;
+    const container = this.add.container(0, 0).setDepth(1000);
+    this._pauseContainer = container;
+
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.85);
+    overlay.fillRect(0, 0, W, H);
+    overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, W, H), Phaser.Geom.Rectangle.Contains);
+    container.add(overlay);
+
+    const title = this.add.text(W / 2, 40, 'SETTINGS', {
+      fontSize: '32px', fontFamily: 'monospace', color: '#ffffff'
+    }).setOrigin(0.5);
+    container.add(title);
+
+    // Check for available languages
+    const langs = Data.game?.localization?.availableLanguages || ['en'];
+    const langNames = Data.game?.localization?.languageNames || {};
+    const hasLocalization = langs.length > 1;
+
+    const rowY = [140, 200, 260, 320, 380, hasLocalization ? 440 : null].filter(v => v !== null);
+    const labels = ['Text Speed', 'BGM Volume', 'SFX Volume', 'Voice Volume', 'Fullscreen'];
+    const getters = [
+      () => `${Settings.textSpeed}ms`,
+      () => `${Math.round(Settings.bgmVolume * 100)}%`,
+      () => `${Math.round(Settings.sfxVolume * 100)}%`,
+      () => `${Math.round(Settings.voiceVolume * 100)}%`,
+      () => Settings.fullscreen ? 'On' : 'Off',
+    ];
+    const actions = [
+      { inc: () => { Settings.textSpeed = Settings.clamp(Settings.textSpeed + 10, 10, 200); Settings.save(); this.dialogue.setTextSpeed(Settings.textSpeed); },
+        dec: () => { Settings.textSpeed = Settings.clamp(Settings.textSpeed - 10, 10, 200); Settings.save(); this.dialogue.setTextSpeed(Settings.textSpeed); } },
+      { inc: () => { Settings.bgmVolume = Settings.clamp(Settings.bgmVolume + 0.1, 0, 1); Settings.save(); this.audio.setBGMVolume(Settings.bgmVolume); },
+        dec: () => { Settings.bgmVolume = Settings.clamp(Settings.bgmVolume - 0.1, 0, 1); Settings.save(); this.audio.setBGMVolume(Settings.bgmVolume); } },
+      { inc: () => { Settings.sfxVolume = Settings.clamp(Settings.sfxVolume + 0.1, 0, 1); Settings.save(); this.audio.setSFXVolume(Settings.sfxVolume); },
+        dec: () => { Settings.sfxVolume = Settings.clamp(Settings.sfxVolume - 0.1, 0, 1); Settings.save(); this.audio.setSFXVolume(Settings.sfxVolume); } },
+      { inc: () => { Settings.voiceVolume = Settings.clamp(Settings.voiceVolume + 0.1, 0, 1); Settings.save(); this.audio.setVoiceVolume(Settings.voiceVolume); },
+        dec: () => { Settings.voiceVolume = Settings.clamp(Settings.voiceVolume - 0.1, 0, 1); Settings.save(); this.audio.setVoiceVolume(Settings.voiceVolume); } },
+      { inc: () => { Settings.fullscreen = true; Settings.save(); this.scale.startFullscreen(); },
+        dec: () => { Settings.fullscreen = false; Settings.save(); this.scale.stopFullscreen(); } },
+    ];
+
+    // Add language picker if multiple languages available
+    if (hasLocalization) {
+      labels.push('Language');
+      getters.push(() => langNames[Settings.language] || Settings.language);
+      actions.push({
+        inc: () => {
+          const idx = langs.indexOf(Settings.language);
+          Settings.language = langs[(idx + 1) % langs.length];
+          Settings.save();
+        },
+        dec: () => {
+          const idx = langs.indexOf(Settings.language);
+          Settings.language = langs[(idx - 1 + langs.length) % langs.length];
+          Settings.save();
+        }
+      });
+    }
+
+    const valueTexts = [];
+    labels.forEach((label, i) => {
+      container.add(this.add.text(W / 2 - 200, rowY[i], label, {
+        fontSize: '18px', fontFamily: 'monospace', color: '#cccccc'
+      }).setOrigin(0, 0.5));
+
+      const minus = this.add.text(W / 2 + 100, rowY[i], '  −  ', {
+        fontSize: '22px', fontFamily: 'monospace', color: '#ff6666',
+        backgroundColor: '#331111', padding: { x: 6, y: 2 }
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+      const val = this.add.text(W / 2 + 165, rowY[i], getters[i](), {
+        fontSize: '18px', fontFamily: 'monospace', color: '#00ccff',
+        align: 'center', fixedWidth: 80
+      }).setOrigin(0.5);
+      valueTexts.push(val);
+
+      const plus = this.add.text(W / 2 + 230, rowY[i], '  +  ', {
+        fontSize: '22px', fontFamily: 'monospace', color: '#66ff66',
+        backgroundColor: '#113311', padding: { x: 6, y: 2 }
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+      minus.on('pointerup', () => { actions[i].dec(); val.setText(getters[i]()); });
+      plus.on('pointerup', () => { actions[i].inc(); val.setText(getters[i]()); });
+      container.add(minus);
+      container.add(plus);
+    });
+
+    // Back button
+    const backBtn = this.add.text(W / 2, H - 50, '← Back (ESC)', {
+      fontSize: '18px', fontFamily: 'monospace', color: '#aaaaaa'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
+    backBtn.on('pointerout', () => backBtn.setColor('#aaaaaa'));
+    backBtn.on('pointerup', () => {
+      this._closePauseMenu();
+      this._showPauseMenu();
+    });
+    container.add(backBtn);
   }
 
   /* ── START SCENE ───────────────────────────── */
