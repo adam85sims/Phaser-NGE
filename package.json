@@ -27,6 +27,7 @@
     "files": [
       "dist/**/*",
       "src-main/**/*",
+      "tools/shared/**/*",
       "package.json"
     ],
     "extraFiles": [

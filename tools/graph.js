@@ -672,9 +672,22 @@ function getOutputPorts(node, sx, sy, sw) {
 
 function onPointerDown(e) {
   e.stopPropagation();
+  if (e.button === 2) return; // Ignore right click
+  
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
+
+  // Middle mouse click ALWAYS starts panning immediately
+  if (e.button === 1 || e.button === 4) { // Also support mouse button 4 if needed, but 1 is middle
+    graphState.panning = true;
+    graphState.panStart = {
+      x: mx - graphState.camera.x * graphState.zoom,
+      y: my - graphState.camera.y * graphState.zoom
+    };
+    return;
+  }
+
   const hit = hitTest(mx, my);
 
   if (hit?.type === 'port') {
@@ -730,13 +743,8 @@ function onPointerDown(e) {
     return;
   }
 
-  // ── Click on empty space: candidate for marquee or pan ──
-  // Don't start panning yet — wait for mouse move to decide.
+  // ── Click on empty space: candidate for marquee or deselect ──
   // Record the starting position so onPointerMove can threshold-check.
-  graphState.panStart = {
-    x: mx - graphState.camera.x * graphState.zoom,
-    y: my - graphState.camera.y * graphState.zoom
-  };
   graphState._emptyDownX = mx;
   graphState._emptyDownY = my;
   graphState._emptyDownShift = e.shiftKey;
@@ -885,7 +893,7 @@ function onPointerUp(e) {
     return;
   }
 
-  // ── Pending empty-space click (no drag happened): deselect + start panning ──
+  // ── Pending empty-space click (no drag happened): deselect ──
   if (graphState._emptyDownX != null) {
     // It was a click, not a drag — deselect everything (unless Shift held)
     delete graphState._emptyDownX;
@@ -899,9 +907,6 @@ function onPointerUp(e) {
       editorState.selectedItemType = null;
       window.dispatchEvent(new CustomEvent('editor:render'));
     }
-    // Start panning from this point
-    graphState.panning = true;
-    return;
   }
 
   if (graphState.connectionDraft) {

@@ -58,3 +58,6 @@ arrative_globals\ localStorage key.
 - *Gotcha:* The CG Gallery UI needs to know the total number of gallery images to display locked \?\ placeholders, but we have no backend at runtime. *Fix:* Intercepted the \/api/save\ request in the editor backend to automatically scan \public/assets/gallery/\ and compile a master list into \game.gallery\ upon save.
 
 - *Decision:* Blocked browser history navigation (back/forward mouse buttons) inside the editor V2 SPA to prevent accidental exits. Used a combination of `mousedown` preventDefault (for buttons 3 and 4) and a dummy history pushState/popstate trap.
+
+- *Gotcha:* The Electron build produced an `ERR_MODULE_NOT_FOUND` for `tools/shared/api-handlers.js` because `electron-builder` only packages files specified in the `build.files` array.
+- *Decision:* Added `"tools/shared/**/*"` to the `files` array in `package.json` to ensure the shared API logic required by the backend is bundled correctly in `app.asar`.
