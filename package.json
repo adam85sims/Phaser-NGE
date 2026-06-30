@@ -54,6 +54,7 @@
   },
   "dependencies": {
     "@monaco-editor/loader": "^1.7.0",
+    "archiver": "^8.0.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "phaser": "^4.1.0",

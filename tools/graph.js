@@ -12,7 +12,16 @@ let graphState = {
   panStart: { x: 0, y: 0 },
   dragging: null,
   connectionDraft: null,
-  hoveredPort: null
+  hoveredPort: null,
+  // ── Marquee selection ──
+  // null = inactive; when active holds screen-space start + current coords
+  marquee: null,
+  // Threshold in screen pixels before a mousedown-on-empty becomes a marquee
+  // (prevents accidental marquee on tiny clicks)
+  MARQUEE_THRESHOLD: 6,
+  // IDs of all selected nodes (multi-select). The "primary" selection for the
+  // inspector is still editorState.selectedItemId — this array tracks the full set.
+  selectedNodeIds: []
 };
 
 export function mountGraph(container) {
@@ -104,14 +113,23 @@ export function mountGraph(container) {
     // Ignore if typing in an input (unless it's the palette input itself and we're not deleting)
     const tag = document.activeElement ? document.activeElement.tagName : '';
     const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-    
+
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (inInput) return;
       if (canvas && canvas.offsetParent !== null) {
         deleteSelectedNode();
       }
     }
-    
+
+    // D: create dialogue node (quick create for the most common node type)
+    if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (inInput) return;
+      if (canvas && canvas.offsetParent !== null) {
+        e.preventDefault();
+        createNode('dialogue');
+      }
+    }
+
     if (e.code === 'Space' && (e.metaKey || e.ctrlKey)) {
       if (canvas && canvas.offsetParent !== null) {
         e.preventDefault();
@@ -164,6 +182,17 @@ export function createNode(type = 'dialogue', wx = null, wy = null) {
   editorState.selectedItemType = 'node';
   window.dispatchEvent(new CustomEvent('editor:render'));
 
+  // Auto-focus the text field for dialogue nodes (the most common action)
+  if (type === 'dialogue') {
+    setTimeout(() => {
+      const textarea = document.querySelector('[data-field="text"]');
+      if (textarea) {
+        textarea.focus();
+        textarea.select();
+      }
+    }, 50);
+  }
+
   return node;
 }
 
@@ -197,9 +226,47 @@ export function deleteNode(nodeId) {
 }
 
 export function deleteSelectedNode() {
+  // Multi-select: delete all selected nodes
+  if (graphState.selectedNodeIds.length > 1) {
+    captureUndoState();
+    // Delete all but the primary (which deleteNode handles)
+    const toDelete = graphState.selectedNodeIds.filter(id => id !== editorState.selectedItemId);
+    toDelete.forEach(id => deleteNodeNoUndo(id));
+    // Delete the primary last
+    if (editorState.selectedItemType === 'node' && editorState.selectedItemId) {
+      deleteNode(editorState.selectedItemId);
+    }
+    graphState.selectedNodeIds = [];
+    return;
+  }
+  // Single select
   if (editorState.selectedItemType === 'node' && editorState.selectedItemId) {
+    graphState.selectedNodeIds = [];
     deleteNode(editorState.selectedItemId);
   }
+}
+
+/**
+ * Internal: delete a node without capturing undo (used for batch multi-delete).
+ * The caller is responsible for calling captureUndoState() once before the batch.
+ */
+function deleteNodeNoUndo(nodeId) {
+  const sceneData = editorState.scenes[editorState.activeSceneId];
+  if (!sceneData || !sceneData.nodes) return;
+
+  const idx = sceneData.nodes.findIndex(n => n.id === nodeId);
+  if (idx === -1) return;
+
+  sceneData.nodes.splice(idx, 1);
+
+  // Remove all connections pointing to this node
+  sceneData.nodes.forEach(n => {
+    if (n.next === nodeId) n.next = '';
+    if (n.else === nodeId) n.else = '';
+    if (n.choices) {
+      n.choices.forEach(c => { if (c.next === nodeId) c.next = ''; });
+    }
+  });
 }
 
 /* ── Context Menu ────────────────────────── */
@@ -447,13 +514,16 @@ function renderCanvas() {
 
   const selectedNodeId = editorState.selectedItemType === 'node' ? editorState.selectedItemId : null;
 
+  // ── Multi-select set for fast lookup ──
+  const multiSelected = new Set(graphState.selectedNodeIds);
+
   // Draw nodes
   getNodes().forEach(node => {
     const r = getNodeRect(node);
     const s = worldToScreen(r.x, r.y);
     const sw = r.w * graphState.zoom;
     const sh = r.h * graphState.zoom;
-    const selected = node.id === selectedNodeId;
+    const selected = node.id === selectedNodeId || multiSelected.has(node.id);
     const def = Registry.getNodeType(node.type);
     const color = def?.color || '#666';
     const radius = 6;
@@ -497,12 +567,21 @@ function renderCanvas() {
       ctx.fillText('📝', s.x + sw - 20 * graphState.zoom, s.y + 22 * graphState.zoom);
     }
 
-    // Preview snippet
+    // Preview snippet — show speaker + truncated text
     let snippet = '';
-    if (node.type === 'dialogue' && node.text) snippet = node.text.slice(0, 22) + '…';
-    if (node.type === 'choice' && node.prompt) snippet = node.prompt.slice(0, 18) + '…';
+    if (node.type === 'dialogue') {
+      const speaker = node.speaker ? node.speaker + ': ' : '';
+      const text = node.text || '';
+      if (text.length > 0) {
+        const maxLen = Math.max(18, Math.floor(36 * graphState.zoom));
+        snippet = speaker + (text.length > maxLen ? text.slice(0, maxLen) + '…' : text);
+      } else {
+        snippet = speaker + '(click to add dialogue…)';
+      }
+    }
+    if (node.type === 'choice' && node.prompt) snippet = node.prompt.slice(0, 22) + '…';
     if (snippet) {
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillStyle = node.type === 'dialogue' && !node.text ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.25)';
       ctx.font = `${9 * graphState.zoom}px sans-serif`;
       ctx.fillText(snippet, s.x + 8 * graphState.zoom, s.y + sh - 6 * graphState.zoom);
     }
@@ -530,6 +609,23 @@ function renderCanvas() {
       }
     });
   });
+
+  // ── Marquee selection rectangle ──
+  if (graphState.marquee) {
+    const m = graphState.marquee;
+    const sx = Math.min(m.startX, m.currentX);
+    const sy = Math.min(m.startY, m.currentY);
+    const sw = Math.abs(m.currentX - m.startX);
+    const sh = Math.abs(m.currentY - m.startY);
+
+    ctx.fillStyle = 'rgba(0, 204, 255, 0.08)';
+    ctx.fillRect(sx, sy, sw, sh);
+    ctx.strokeStyle = 'rgba(0, 204, 255, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(sx, sy, sw, sh);
+    ctx.setLineDash([]);
+  }
 }
 
 function roundRect(ctx, x, y, w, h, radii) {
@@ -587,13 +683,44 @@ function onPointerDown(e) {
     return;
   }
   if (hit?.type === 'node') {
-    editorState.selectedItemId = hit.nodeId; 
-    editorState.selectedItemType = "node"; 
-    window.dispatchEvent(new CustomEvent("editor:render"));
-    
-    const node = getNodes().find(n => n.id === hit.nodeId);
+    // ── Multi-select: Shift+click toggles node in selection ──
+    if (e.shiftKey) {
+      const idx = graphState.selectedNodeIds.indexOf(hit.nodeId);
+      if (idx >= 0) {
+        graphState.selectedNodeIds.splice(idx, 1);
+      } else {
+        graphState.selectedNodeIds.push(hit.nodeId);
+      }
+      // Update primary selection to the last clicked node
+      editorState.selectedItemId = hit.nodeId;
+      editorState.selectedItemType = 'node';
+    } else {
+      // Normal click: select this node (and only this, unless it's already in a multi-selection)
+      if (!graphState.selectedNodeIds.includes(hit.nodeId)) {
+        graphState.selectedNodeIds = [hit.nodeId];
+      }
+      editorState.selectedItemId = hit.nodeId;
+      editorState.selectedItemType = 'node';
+    }
+    window.dispatchEvent(new CustomEvent('editor:render'));
+
+    // ── Multi-node drag: drag all selected nodes together ──
+    const allSelected = graphState.selectedNodeIds.length > 0
+      ? graphState.selectedNodeIds
+      : [hit.nodeId];
+
+    const nodeOffsets = allSelected.map(id => {
+      const n = getNodes().find(x => x.id === id);
+      return n ? { nodeId: id, ox: n.x, oy: n.y } : null;
+    }).filter(Boolean);
+
     captureUndoState(); // Capture before starting node drag
-    graphState.dragging = { nodeId: hit.nodeId, startX: mx, startY: my, nodeX: node?.x, nodeY: node?.y };
+    graphState.dragging = {
+      nodeId: hit.nodeId,
+      startX: mx,
+      startY: my,
+      nodeOffsets
+    };
     return;
   }
   if (hit?.type === 'play-btn') {
@@ -602,13 +729,17 @@ function onPointerDown(e) {
     }
     return;
   }
-  graphState.panning = true;
-  graphState.panStart = { x: mx - graphState.camera.x * graphState.zoom, y: my - graphState.camera.y * graphState.zoom };
-  
-  // Deselect on empty click
-  editorState.selectedItemId = null;
-  editorState.selectedItemType = null;
-  window.dispatchEvent(new CustomEvent("editor:render"));
+
+  // ── Click on empty space: candidate for marquee or pan ──
+  // Don't start panning yet — wait for mouse move to decide.
+  // Record the starting position so onPointerMove can threshold-check.
+  graphState.panStart = {
+    x: mx - graphState.camera.x * graphState.zoom,
+    y: my - graphState.camera.y * graphState.zoom
+  };
+  graphState._emptyDownX = mx;
+  graphState._emptyDownY = my;
+  graphState._emptyDownShift = e.shiftKey;
 }
 
 function onPointerMove(e) {
@@ -617,7 +748,7 @@ function onPointerMove(e) {
   const my = e.clientY - rect.top;
 
   // Update cursor and hovered port based on what we're hovering
-  if (!graphState.connectionDraft && !graphState.dragging && !graphState.panning) {
+  if (!graphState.connectionDraft && !graphState.dragging && !graphState.panning && !graphState.marquee && !graphState._emptyDownX) {
     const hit = hitTest(mx, my);
     if (hit?.type === 'port') {
       canvas.style.cursor = 'crosshair';
@@ -638,9 +769,76 @@ function onPointerMove(e) {
   } else if (graphState.connectionDraft) {
     canvas.style.cursor = 'crosshair';
     graphState.hoveredPort = null;
+  } else if (graphState.marquee) {
+    canvas.style.cursor = 'crosshair';
   }
 
-  if (graphState.connectionDraft) { graphState.connectionDraft.mx = mx; graphState.connectionDraft.my = my; 
+  // ── Empty-space mousedown pending: decide between marquee and pan ──
+  if (graphState._emptyDownX != null && !graphState.panning && !graphState.marquee) {
+    const dx = mx - graphState._emptyDownX;
+    const dy = my - graphState._emptyDownY;
+    if (Math.abs(dx) > graphState.MARQUEE_THRESHOLD || Math.abs(dy) > graphState.MARQUEE_THRESHOLD) {
+      // Threshold exceeded — this is a marquee drag
+      graphState.marquee = {
+        startX: graphState._emptyDownX,
+        startY: graphState._emptyDownY,
+        currentX: mx,
+        currentY: my,
+        additive: graphState._emptyDownShift
+      };
+      // Clear pending state so we don't re-evaluate
+      delete graphState._emptyDownX;
+      delete graphState._emptyDownY;
+      delete graphState._emptyDownShift;
+    }
+    return;
+  }
+
+  // ── Active marquee: update rectangle + compute selected nodes ──
+  if (graphState.marquee) {
+    graphState.marquee.currentX = mx;
+    graphState.marquee.currentY = my;
+
+    // Compute the screen-space bounding box
+    const m = graphState.marquee;
+    const sx = Math.min(m.startX, m.currentX);
+    const sy = Math.min(m.startY, m.currentY);
+    const sw = Math.abs(m.currentX - m.startX);
+    const sh = Math.abs(m.currentY - m.startY);
+
+    // Find all nodes whose screen-space rects intersect the marquee
+    const hitIds = [];
+    getNodes().forEach(node => {
+      const r = getNodeRect(node);
+      const s = worldToScreen(r.x, r.y);
+      const nw = r.w * graphState.zoom;
+      const nh = r.h * graphState.zoom;
+      // AABB intersection
+      if (s.x < sx + sw && s.x + nw > sx && s.y < sy + sh && s.y + nh > sy) {
+        hitIds.push(node.id);
+      }
+    });
+
+    // If additive (Shift held), merge with existing selection; otherwise replace
+    if (m.additive) {
+      const merged = new Set(graphState.selectedNodeIds);
+      hitIds.forEach(id => merged.add(id));
+      graphState.selectedNodeIds = [...merged];
+    } else {
+      graphState.selectedNodeIds = hitIds;
+    }
+
+    // Update primary selection for inspector (last in list, or null)
+    const primary = graphState.selectedNodeIds.length > 0
+      ? graphState.selectedNodeIds[graphState.selectedNodeIds.length - 1]
+      : null;
+    editorState.selectedItemId = primary;
+    editorState.selectedItemType = primary ? 'node' : null;
+    window.dispatchEvent(new CustomEvent('editor:render'));
+    return;
+  }
+
+  if (graphState.connectionDraft) { graphState.connectionDraft.mx = mx; graphState.connectionDraft.my = my;
     // Track nearest valid drop target for visual feedback
     const dropRadius = Math.max(30, 20 * graphState.zoom);
     let closest = null, closestDist = Infinity;
@@ -653,16 +851,24 @@ function onPointerMove(e) {
       if (d < dropRadius && d < closestDist) { closestDist = d; closest = node.id; }
     });
     graphState.connectionDraft.dropTarget = closest;
-    return; 
+    return;
   }
   if (graphState.dragging) {
     const d = graphState.dragging;
-    const node = getNodes().find(n => n.id === d.nodeId);
-    if (node) {
-      node.x = Math.round((d.nodeX + (mx - d.startX) / graphState.zoom) / 20) * 20;
-      node.y = Math.round((d.nodeY + (my - d.startY) / graphState.zoom) / 20) * 20;
-      markDirty();
-    }
+    const dx = (mx - d.startX) / graphState.zoom;
+    const dy = (my - d.startY) / graphState.zoom;
+    // Snap delta to 20px grid
+    const snapDx = Math.round(dx / 20) * 20;
+    const snapDy = Math.round(dy / 20) * 20;
+    // Move all nodes in the drag group by their original offset + delta
+    d.nodeOffsets.forEach(off => {
+      const node = getNodes().find(n => n.id === off.nodeId);
+      if (node) {
+        node.x = off.ox + snapDx;
+        node.y = off.oy + snapDy;
+      }
+    });
+    markDirty();
     return;
   }
   if (graphState.panning) {
@@ -672,6 +878,32 @@ function onPointerMove(e) {
 }
 
 function onPointerUp(e) {
+  // ── Finalize marquee selection ──
+  if (graphState.marquee) {
+    graphState.marquee = null;
+    window.dispatchEvent(new CustomEvent('editor:render'));
+    return;
+  }
+
+  // ── Pending empty-space click (no drag happened): deselect + start panning ──
+  if (graphState._emptyDownX != null) {
+    // It was a click, not a drag — deselect everything (unless Shift held)
+    delete graphState._emptyDownX;
+    delete graphState._emptyDownY;
+    const wasShift = graphState._emptyDownShift;
+    delete graphState._emptyDownShift;
+
+    if (!wasShift) {
+      graphState.selectedNodeIds = [];
+      editorState.selectedItemId = null;
+      editorState.selectedItemType = null;
+      window.dispatchEvent(new CustomEvent('editor:render'));
+    }
+    // Start panning from this point
+    graphState.panning = true;
+    return;
+  }
+
   if (graphState.connectionDraft) {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;

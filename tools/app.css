@@ -1138,3 +1138,102 @@ body[data-dirty="true"] #inspector {
   border-radius: 0 0 8px 8px;
 }
 
+/* ── Export Dialog ── */
+
+.export-modal {
+  width: 600px;
+  max-width: 90vw;
+}
+
+.export-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.export-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.export-card-coming-soon {
+  opacity: 0.5;
+}
+
+.export-card-coming-soon:hover {
+  border-color: var(--border);
+  background: var(--bg-surface);
+  opacity: 0.5;
+}
+
+.export-card-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.export-card-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.export-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.export-card-info h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.export-card-info p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+  line-height: 1.4;
+}
+
+.export-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.export-badge-electron {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.export-card .btn-export-go {
+  flex-shrink: 0;
+  padding: 6px 16px;
+  font-size: 13px;
+}
+

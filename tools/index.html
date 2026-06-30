@@ -61,14 +61,9 @@
       <button class="icon-btn" id="btn-play" title="Play">
         <svg viewBox="0 0 20 20" fill="currentColor"><path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832l7-4a1 1 0 000-1.664l-7-4z"/></svg>
       </button>
-      <button class="icon-btn" id="btn-export" title="Export HTML5 Build">
+      <button class="icon-btn" id="btn-export" title="Export Build">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-      <button class="icon-btn" id="btn-export-exe" title="Export Windows EXE">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
       <button class="icon-btn" id="btn-settings" title="Settings">
@@ -282,6 +277,64 @@
       </div>
     </div>
   </div>
+
+  <!-- ═══ EXPORT DIALOG ═══ -->
+  <dialog id="export-modal" class="editor-modal export-modal">
+    <div class="modal-header">
+      <h2>Export Build</h2>
+      <button class="icon-btn-sm" id="btn-export-close" title="Close"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.14l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg></button>
+    </div>
+    <div class="modal-body export-grid">
+
+      <div class="export-card" data-export="web">
+        <div class="export-card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        </div>
+        <div class="export-card-info">
+          <h3>Web (HTML5)</h3>
+          <p>Standalone ZIP with embedded server. Unzip and open index.html to play.</p>
+        </div>
+        <button class="btn btn-primary btn-export-go" data-target="web">Export</button>
+      </div>
+
+      <div class="export-card" data-export="exe">
+        <div class="export-card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 8h2m2 0h2m2 0h2M7 12h2m2 0h2m2 0h2"/></svg>
+        </div>
+        <div class="export-card-info">
+          <h3>Windows (EXE)</h3>
+          <p>Desktop application for Windows. Requires Electron packaging.</p>
+          <span class="export-badge export-badge-electron">Desktop Only</span>
+        </div>
+        <button class="btn btn-primary btn-export-go" data-target="exe">Export</button>
+      </div>
+
+      <div class="export-card export-card-coming-soon" data-export="linux">
+        <div class="export-card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+        </div>
+        <div class="export-card-info">
+          <h3>Linux (Unpacked)</h3>
+          <p>AppImage or Flatpak for Linux desktops.</p>
+          <span class="export-badge">Coming Soon</span>
+        </div>
+        <button class="btn btn-primary btn-export-go" data-target="linux" disabled>Export</button>
+      </div>
+
+      <div class="export-card export-card-coming-soon" data-export="apk">
+        <div class="export-card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+        </div>
+        <div class="export-card-info">
+          <h3>Android (APK)</h3>
+          <p>Mobile application for Android devices.</p>
+          <span class="export-badge">Coming Soon</span>
+        </div>
+        <button class="btn btn-primary btn-export-go" data-target="apk" disabled>Export</button>
+      </div>
+
+    </div>
+  </dialog>
 
   <dialog id="settings-modal" class="editor-modal">
     <div class="modal-header">
