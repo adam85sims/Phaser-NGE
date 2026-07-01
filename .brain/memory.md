@@ -61,3 +61,5 @@ arrative_globals\ localStorage key.
 
 - *Gotcha:* The Electron build produced an `ERR_MODULE_NOT_FOUND` for `tools/shared/api-handlers.js` because `electron-builder` only packages files specified in the `build.files` array.
 - *Decision:* Added `"tools/shared/**/*"` to the `files` array in `package.json` to ensure the shared API logic required by the backend is bundled correctly in `app.asar`.
+- *Decision:* Added a `comment` node type intended purely for the node graph editor to help writers document complex branching logic. It is ignored at runtime, rendered as a translucent sticky note, hides input/output ports, and includes custom click-and-drag logic on a bottom-right handle to support arbitrary width/height resizing.
+- *Gotcha:* The visual node graph previously hardcoded node dimensions via `NODE_W` and `NODE_H` constants in `tools/graph.js`. Resizable comments required making `getNodeRect` and `getNodeHeight` dynamic, checking for `node.width` and `node.height` first before falling back to the constants.

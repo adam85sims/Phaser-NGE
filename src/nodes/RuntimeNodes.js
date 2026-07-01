@@ -465,3 +465,21 @@ Registry.registerNodeType('end', {
 // Alias for backwards compatibility if needed
 Registry.registerNodeType('macro', Registry.getNodeType('call_scene'));
 Registry.getNodeType('macro').label = 'Macro';
+
+Registry.registerNodeType('comment', {
+  label: 'Comment',
+  color: '#ca8a04',
+  defaultData: () => ({ text: 'New Comment...', width: 220, height: 120 }),
+  getOutputs: () => [],
+  executeRuntime: (node, ctrl) => {
+    ctrl.advance();
+  },
+  renderEditor: (node) => {
+    return `
+      <div class="form-group">
+        <label>Comment Text</label>
+        <textarea style="height: 120px;" data-field="text">${(node.text || '').replace(/</g,'&lt;')}</textarea>
+      </div>
+    `;
+  }
+});

@@ -21,7 +21,8 @@ let graphState = {
   MARQUEE_THRESHOLD: 6,
   // IDs of all selected nodes (multi-select). The "primary" selection for the
   // inspector is still editorState.selectedItemId — this array tracks the full set.
-  selectedNodeIds: []
+  selectedNodeIds: [],
+  resizing: null
 };
 
 export function mountGraph(container) {
@@ -528,6 +529,42 @@ function renderCanvas() {
     const color = def?.color || '#666';
     const radius = 6;
 
+    if (node.type === 'comment') {
+      ctx.fillStyle = selected ? 'rgba(202, 138, 4, 0.4)' : 'rgba(202, 138, 4, 0.2)';
+      ctx.strokeStyle = selected ? '#00ccff' : 'rgba(202, 138, 4, 0.8)';
+      ctx.lineWidth = selected ? 2 : 1;
+      roundRect(ctx, s.x, s.y, sw, sh, radius);
+      ctx.fill();
+      if (!selected) ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw resize handle in bottom right
+      ctx.fillStyle = selected ? '#00ccff' : 'rgba(202, 138, 4, 0.8)';
+      ctx.beginPath();
+      ctx.moveTo(s.x + sw, s.y + sh - 15 * graphState.zoom);
+      ctx.lineTo(s.x + sw, s.y + sh);
+      ctx.lineTo(s.x + sw - 15 * graphState.zoom, s.y + sh);
+      ctx.fill();
+
+      // Draw text
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = `${14 * graphState.zoom}px sans-serif`;
+      const text = node.text || '';
+      const lines = text.split('\n');
+      let lineY = s.y + 20 * graphState.zoom;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(s.x + 8 * graphState.zoom, s.y + 8 * graphState.zoom, sw - 16 * graphState.zoom, sh - 16 * graphState.zoom);
+      ctx.clip();
+      for (const line of lines) {
+        ctx.fillText(line, s.x + 10 * graphState.zoom, lineY);
+        lineY += 18 * graphState.zoom;
+      }
+      ctx.restore();
+      return; // Skip standard node rendering
+    }
+
     ctx.shadowColor = selected ? 'rgba(0,204,255,0.3)' : 'rgba(0,0,0,0.3)';
     ctx.shadowBlur = selected ? 12 : 4;
     roundRect(ctx, s.x, s.y, sw, sh, radius);
@@ -645,10 +682,11 @@ function roundRect(ctx, x, y, w, h, radii) {
 }
 
 function getNodeRect(node) {
-  return { x: node.x, y: node.y, w: NODE_W, h: getNodeHeight(node) };
+  return { x: node.x, y: node.y, w: node.width || NODE_W, h: getNodeHeight(node) };
 }
 
 function getNodeHeight(node) {
+  if (node.height) return node.height;
   const def = Registry.getNodeType(node.type);
   if (def && def.getHeight) return def.getHeight(node);
   return NODE_H;
@@ -689,6 +727,19 @@ function onPointerDown(e) {
   }
 
   const hit = hitTest(mx, my);
+
+  if (hit?.type === 'resize-handle') {
+    captureUndoState();
+    const node = getNodes().find(n => n.id === hit.nodeId);
+    graphState.resizing = {
+      nodeId: hit.nodeId,
+      startX: mx,
+      startY: my,
+      startW: node.width || NODE_W,
+      startH: node.height || getNodeHeight(node)
+    };
+    return;
+  }
 
   if (hit?.type === 'port') {
     captureUndoState(); // Capture before starting connection drag
@@ -771,6 +822,9 @@ function onPointerMove(e) {
       canvas.style.cursor = 'default';
       graphState.hoveredPort = null;
     }
+  } else if (graphState.resizing) {
+    canvas.style.cursor = 'nwse-resize';
+    graphState.hoveredPort = null;
   } else if (graphState.dragging) {
     canvas.style.cursor = 'grabbing';
     graphState.hoveredPort = null;
@@ -852,6 +906,7 @@ function onPointerMove(e) {
     let closest = null, closestDist = Infinity;
     getNodes().forEach(node => {
       if (node.id === graphState.connectionDraft.fromId) return;
+      if (node.type === 'comment') return;
       const r = getNodeRect(node);
       const s = worldToScreen(r.x, r.y);
       const sh = r.h * graphState.zoom;
@@ -877,6 +932,18 @@ function onPointerMove(e) {
       }
     });
     markDirty();
+    return;
+  }
+  if (graphState.resizing) {
+    const r = graphState.resizing;
+    const dx = (mx - r.startX) / graphState.zoom;
+    const dy = (my - r.startY) / graphState.zoom;
+    const node = getNodes().find(n => n.id === r.nodeId);
+    if (node) {
+      node.width = Math.max(100, Math.round((r.startW + dx) / 20) * 20);
+      node.height = Math.max(40, Math.round((r.startH + dy) / 20) * 20);
+      markDirty();
+    }
     return;
   }
   if (graphState.panning) {
@@ -917,6 +984,7 @@ function onPointerUp(e) {
     let closest = null, closestDist = Infinity;
     getNodes().forEach(node => {
       if (node.id === graphState.connectionDraft.fromId) return;
+      if (node.type === 'comment') return;
       const r = getNodeRect(node);
       const s = worldToScreen(r.x, r.y);
       const sh = r.h * graphState.zoom;
@@ -940,6 +1008,7 @@ function onPointerUp(e) {
     window.dispatchEvent(new CustomEvent("editor:render"));
     return;
   }
+  graphState.resizing = null;
   graphState.dragging = null;
   graphState.panning = false;
 }
@@ -963,6 +1032,20 @@ function hitTest(mx, my) {
     }
   }
   
+  // Pass 1.5: check resize handles for comments
+  for (let i = getNodes().length - 1; i >= 0; i--) {
+    const node = getNodes()[i];
+    if (node.type !== 'comment') continue;
+    const r = getNodeRect(node);
+    const s = worldToScreen(r.x, r.y);
+    const sw = r.w * graphState.zoom;
+    const sh = r.h * graphState.zoom;
+    const handleHitSize = 20 * graphState.zoom;
+    if (mx >= s.x + sw - handleHitSize && mx <= s.x + sw && my >= s.y + sh - handleHitSize && my <= s.y + sh) {
+      return { type: 'resize-handle', nodeId: node.id };
+    }
+  }
+
   // Second pass: check node bodies and play buttons
   for (let i = getNodes().length - 1; i >= 0; i--) {
     const node = getNodes()[i];

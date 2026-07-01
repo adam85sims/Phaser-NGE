@@ -1,9 +1,12 @@
-# Session State (June 17, 2026)
+# Session State (June 30, 2026)
 
-**Current Goal:** Fix missing node coordinates in new project template
+**Current Goal:** Add resizable comment nodes to the editor graph
 Status: Complete
 Completed:
-- Added x/y coordinates to the default "n1" node in `launcher.js` so it renders visibly in the dialogue editor.
+- Added `comment` node type in `src/nodes/RuntimeNodes.js`.
+- Modified `tools/graph.js` to support arbitrary width/height for nodes.
+- Implemented resize handle rendering and pointer interactions in the editor.
+- Rendered comment nodes as translucent sticky notes to differentiate from standard logic nodes.
 
 Next Steps (from Audit):
 1. Inventory system — key items, collectibles, conditions on items
